@@ -5,6 +5,7 @@
 !/G09/
 !/G16/
 !/.gitignore
+!/README.md
 
 # Editor/OS junk, even inside the tracked folders
 **/.DS_Store
