@@ -1,0 +1,198 @@
+function gjf_file = G09_restart(filename, varargin)
+% G09_RESTART  Generates a Gaussian 09/16 input file (.gjf) for restarting
+%              a calculation from a geometry in an existing .log/.out file.
+%
+%   gjf_file = G09_RESTART(filename)
+%   gjf_file = G09_RESTART(filename, Name, Value, ...)
+%
+%   Optional parameters (Name-Value):
+%       'step'        - 'last' (default) | 'first' | integer N
+%       'output'      - output .gjf path (default: <base>_restarted.gjf)
+%       'extra_route' - additional keywords appended to route
+%       'nproc'       - %nprocshared override (0 = keep or omit)
+%       'mem'         - %mem override ('' = keep or omit)
+%
+%   NOTE: Gaussian 09 Windows files often lack %chk in the output.
+%         The checkpoint name is derived from the source filename in that case.
+%
+%   OUTPUT:
+%       gjf_file    char    path of the generated .gjf file
+
+p = inputParser;
+addRequired(p,  'filename',    @ischar);
+addParameter(p, 'step',        'last', @(x) ischar(x)||isnumeric(x));
+addParameter(p, 'output',      '',     @ischar);
+addParameter(p, 'extra_route', '',     @ischar);
+addParameter(p, 'nproc',       0,      @isnumeric);
+addParameter(p, 'mem',         '',     @ischar);
+parse(p, filename, varargin{:});
+
+step_req    = p.Results.step;
+out_file    = p.Results.output;
+extra_route = strtrim(p.Results.extra_route);
+nproc_ov    = p.Results.nproc;
+mem_ov      = p.Results.mem;
+
+if ~isfile(filename)
+    error('G09_restart: file not found: %s', filename);
+end
+
+lines = G09_read_lines(filename);
+N     = numel(lines);
+
+% ── Link 0 ──────────────────────────────────────────────────────────────────
+chk_path = ''; nproc_str = ''; mem_str = '';
+for k = 1:min(N, 200)
+    ls = strtrim(lines{k});
+    if strncmpi(ls, '%chk=', 5),          chk_path  = strtrim(ls(6:end));
+    elseif strncmpi(ls, '%nprocshared=', 13), nproc_str = strtrim(ls(14:end));
+    elseif strncmpi(ls, '%nproc=', 7),    nproc_str = strtrim(ls(8:end));
+    elseif strncmpi(ls, '%mem=', 5),      mem_str   = strtrim(ls(6:end));
+    end
+end
+
+if nproc_ov > 0, nproc_str = num2str(nproc_ov); end
+if ~isempty(mem_ov), mem_str = mem_ov; end
+
+% ── Checkpoint path ──────────────────────────────────────────────────────────
+[src_dir, src_base, ~] = fileparts(filename);
+src_base_clean = regexprep(src_base, '_restarted$', '');
+
+if ~isempty(chk_path)
+    [chk_dir, chk_base, ~] = fileparts(chk_path);
+    chk_base = regexprep(chk_base, '_restarted$', '');
+    if isempty(chk_dir)
+        new_chk = [chk_base, '_restarted.chk'];
+    else
+        new_chk = [chk_dir, '/', chk_base, '_restarted.chk'];
+    end
+else
+    % No %chk found in file — derive from source filename
+    new_chk = [src_base_clean, '_restarted.chk'];
+end
+
+% ── Route section ────────────────────────────────────────────────────────────
+sep_idx = find(~cellfun(@isempty, regexp(lines, '^\s*-{10,}\s*$')));
+
+route_sep_start = [];
+for si = 1:numel(sep_idx)
+    k = sep_idx(si);
+    for j = k+1 : min(k+3, N)
+        if ~isempty(regexp(strtrim(lines{j}), '^#', 'once'))
+            route_sep_start = k; break
+        end
+    end
+    if ~isempty(route_sep_start), break; end
+end
+
+route_sep_end = [];
+for si = 1:numel(sep_idx)
+    if sep_idx(si) > route_sep_start
+        route_sep_end = sep_idx(si); break
+    end
+end
+
+if isempty(route_sep_start) || isempty(route_sep_end)
+    error('G09_restart: route section not found in %s', filename);
+end
+
+route_lines = {};
+for k = route_sep_start+1 : route_sep_end-1
+    ln = strtrim(lines{k});
+    if ~isempty(ln), route_lines{end+1} = ln; end %#ok<AGROW>
+end
+route_str = strtrim(strjoin(route_lines, ' '));
+if ~isempty(extra_route)
+    route_str = [route_str, ' ', extra_route];
+end
+
+% ── Charge / multiplicity ────────────────────────────────────────────────────
+charge = 0; mult = 1;
+for k = 1:N
+    tok = regexp(lines{k}, 'Charge\s*=\s*([-\d]+)\s+Multiplicity\s*=\s*(\d+)', ...
+                 'tokens', 'once');
+    if ~isempty(tok)
+        charge = str2double(tok{1}); mult = str2double(tok{2}); break
+    end
+end
+
+% ── Geometry ─────────────────────────────────────────────────────────────────
+mol = G09_structure(filename, 'step', step_req);
+
+% ── Output file ──────────────────────────────────────────────────────────────
+if isempty(out_file)
+    if isempty(src_dir)
+        out_file = [src_base_clean, '_restarted.gjf'];
+    else
+        out_file = [src_dir, '/', src_base_clean, '_restarted.gjf'];
+    end
+end
+
+if ischar(step_req), step_label = step_req;
+else, step_label = sprintf('step %d', step_req); end
+
+title_line = sprintf('%s_restarted from %s (%s geometry)', ...
+    src_base_clean, filename, step_label);
+
+% ── Write ─────────────────────────────────────────────────────────────────────
+fid = fopen(out_file, 'w');
+if fid < 0
+    error('G09_restart: cannot create output file: %s', out_file);
+end
+
+fprintf(fid, '! Restarted from: %s\n', filename);
+fprintf(fid, '! Generated by G09_restart (G09 Toolbox / MATLAB)\n');
+fprintf(fid, '!\n');
+
+if ~isempty(new_chk),   fprintf(fid, '%%chk=%s\n',          new_chk);   end
+if ~isempty(nproc_str), fprintf(fid, '%%nprocshared=%s\n',  nproc_str); end
+if ~isempty(mem_str),   fprintf(fid, '%%mem=%s\n',          mem_str);   end
+
+% Wrap route at 72 chars
+wrapped = wrap_route(route_str, 72);
+fprintf(fid, '%s\n', repmat('-',1,70));
+for i = 1:numel(wrapped)
+    fprintf(fid, ' %s\n', wrapped{i});
+end
+fprintf(fid, '%s\n', repmat('-',1,70));
+
+fprintf(fid, '\n%s\n\n', title_line);
+fprintf(fid, '%d %d\n', charge, mult);
+
+for i = 1:mol.Natoms
+    fprintf(fid, '%-4s   %14.8f  %14.8f  %14.8f\n', ...
+        mol.symbols{i}, mol.xyz(i,1), mol.xyz(i,2), mol.xyz(i,3));
+end
+fprintf(fid, '\n');
+
+fclose(fid);
+
+fprintf('\n── G09_restart ──\n');
+fprintf('  Source file    : %s\n', filename);
+fprintf('  Geometry step  : %s  (%d blocks total)\n', num2str(step_req), mol.n_steps);
+fprintf('  Atoms          : %d\n', mol.Natoms);
+fprintf('  Charge / Mult  : %d / %d\n', charge, mult);
+fprintf('  Checkpoint     : %s\n', new_chk);
+fprintf('  Output .gjf    : %s\n', out_file);
+fprintf('\n');
+
+gjf_file = out_file;
+
+end  % G09_restart
+
+
+function wrapped = wrap_route(route_str, max_len)
+tokens  = strsplit(route_str);
+wrapped = {};
+current = '';
+for i = 1:numel(tokens)
+    tok = tokens{i};
+    if isempty(tok), continue; end
+    if isempty(current), current = tok;
+    elseif numel(current)+1+numel(tok) <= max_len, current = [current,' ',tok]; %#ok<AGROW>
+    else, wrapped{end+1} = current; current = tok; %#ok<AGROW>
+    end
+end
+if ~isempty(current), wrapped{end+1} = current; end
+if isempty(wrapped), wrapped = {route_str}; end
+end

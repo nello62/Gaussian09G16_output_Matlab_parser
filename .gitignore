@@ -1,0 +1,14 @@
+# Track only the Gaussian G09/G16 MATLAB toolbox folders — this "prog"
+# directory also contains many unrelated personal MATLAB projects that
+# must never end up in this repository.
+/*
+!/G09/
+!/G16/
+!/.gitignore
+
+# Editor/OS junk, even inside the tracked folders
+**/.DS_Store
+**/*.asv
+
+# Claude Code local tool settings (machine-specific, not project content)
+**/.claude/
