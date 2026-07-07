@@ -27,6 +27,7 @@ p = inputParser;
 addRequired(p,  'filename',  @ischar);
 addParameter(p, 'section',   'last', @ischar);
 addParameter(p, 'modes',     [],     @isnumeric);
+addParameter(p, 'Lines',     {},     @iscell);
 parse(p, filename, varargin{:});
 
 sec_req  = lower(p.Results.section);
@@ -35,13 +36,16 @@ mode_sel = p.Results.modes;
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-if ~isfile(filename)
-    error('G16_nmodes: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_nmodes: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
 end
-fid  = fopen(filename, 'r');
-raw  = fread(fid, '*char')';
-fclose(fid);
-lines = strsplit(raw, newline);
 N = numel(lines);
 
 % -------------------------------------------------------------------------

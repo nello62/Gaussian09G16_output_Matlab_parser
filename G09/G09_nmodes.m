@@ -19,15 +19,25 @@ function nm = G09_nmodes(filename, varargin)
 %       .Natoms     int
 %       .has_Raman  logical
 %       .filename   char
+%
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines (from G09_READ_LINES),
+%                  to skip re-reading the file when it has already been
+%                  read elsewhere (e.g. G09_READ_ALL). Default {} (read
+%                  the file normally).
 
 % -------------------------------------------------------------------------
 p = inputParser;
 addRequired(p,  'filename', @ischar);
 addParameter(p, 'modes',    [],    @isnumeric);
+addParameter(p, 'Lines',    {},    @iscell);
 parse(p, filename, varargin{:});
 mode_sel = p.Results.modes;
 
-lines = G09_read_lines(filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    lines = G09_read_lines(filename);
+end
 N     = numel(lines);
 
 % Find section

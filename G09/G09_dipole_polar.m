@@ -16,6 +16,10 @@ function dp = G09_dipole_polar(filename, varargin)
 %
 %   Optional parameters:
 %       'units'  - 'au' (default) | 'Debye' (for mu only) | 'SI'
+%       'Lines'  - pre-read cell array of file lines (from G09_READ_LINES),
+%                  to skip re-reading the file when it has already been
+%                  read elsewhere (e.g. G09_READ_ALL). Default {} (read
+%                  the file normally).
 %
 %   OUTPUT  struct dp with fields:
 %       .mu_x .mu_y .mu_z   dipole components
@@ -34,14 +38,17 @@ function dp = G09_dipole_polar(filename, varargin)
 p = inputParser;
 addRequired(p,  'filename', @ischar);
 addParameter(p, 'units',    'au', @ischar);
+addParameter(p, 'Lines',    {},   @iscell);
 parse(p, filename, varargin{:});
 units = lower(p.Results.units);
 
-if ~isfile(filename)
-    error('G09_dipole_polar: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G09_dipole_polar: file not found: %s', filename);
+    end
+    lines = G09_read_lines(filename);
 end
-
-lines = G09_read_lines(filename);
 N     = numel(lines);
 
 % Conversion factors

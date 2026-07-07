@@ -49,6 +49,7 @@ addParameter(p, 'dx',        1,      @isnumeric);
 addParameter(p, 'normalize', false,  @islogical);
 addParameter(p, 'plot',      false,  @islogical);
 addParameter(p, 'section',   'last', @ischar);
+addParameter(p, 'Lines',     {},     @iscell);
 parse(p, filename, varargin{:});
 
 FWHM      = p.Results.FWHM;
@@ -62,14 +63,16 @@ sec_req   = lower(p.Results.section);
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-if ~isfile(filename)
-    error('G16_spectra: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_spectra: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
 end
-
-fid  = fopen(filename, 'r');
-raw  = fread(fid, '*char')';
-fclose(fid);
-lines = strsplit(raw, newline);
 
 % -------------------------------------------------------------------------
 % Find sections "Harmonic frequencies ... Raman scattering" (with Raman)

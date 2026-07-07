@@ -86,6 +86,7 @@ addParameter(p, 'DipoleLineWidth', 2.5,        @isnumeric);
 addParameter(p, 'ShowDipoleLabel', true,       @islogical);
 addParameter(p, 'DipoleFontSize',  11,         @isnumeric);
 addParameter(p, 'DipoleUnits',     'Debye',    @ischar);
+addParameter(p, 'Lines',           {},         @iscell);
 parse(p, filename, varargin{:});
 
 charge_type = p.Results.type;
@@ -120,14 +121,17 @@ DEBYE_TO_AU = 0.393430;   % 1 Debye = 0.393430 a.u. (1 a.u. = 2.541746 Debye)
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-if ~isfile(filename)
-    error('G16_charges: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_charges: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
 end
-fid  = fopen(filename, 'r');
-raw  = fread(fid, '*char')';
-fclose(fid);
-lines = strsplit(raw, newline);
-N     = numel(lines);
+N = numel(lines);
 
 % -------------------------------------------------------------------------
 % Locate charge blocks using fuzzy matching
@@ -268,7 +272,7 @@ ch.dipole_au     = [];
 mol = [];   % loaded lazily, at most once, by whichever block needs it first
 if show_dipole
     try
-        dp = G16_dipole_polar(filename, 'units', 'Debye');
+        dp = G16_dipole_polar(filename, 'units', 'Debye', 'Lines', lines);
         mu = local_extract_dipole(dp);
     catch ME
         warning('G16_charges:dipoleReadFailed', ...

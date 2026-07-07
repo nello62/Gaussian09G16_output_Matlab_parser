@@ -15,6 +15,10 @@ function sp = G09_spectra(filename, varargin)
 %       'dx'        - grid step (cm-1, default: 1)
 %       'normalize' - normalise continua to maximum = 1 (default: false)
 %       'plot'      - generate figure (default: false)
+%       'Lines'     - pre-read cell array of file lines (from
+%                     G09_READ_LINES), to skip re-reading the file when it
+%                     has already been read elsewhere (e.g. G09_READ_ALL).
+%                     Default {} (read the file normally).
 %
 %   OUTPUT  struct sp with fields:
 %       .freq        [Nmodes x 1]   frequencies (cm-1)
@@ -39,6 +43,7 @@ addParameter(p, 'xmax',      4000,  @isnumeric);
 addParameter(p, 'dx',        1,     @isnumeric);
 addParameter(p, 'normalize', false, @islogical);
 addParameter(p, 'plot',      false, @islogical);
+addParameter(p, 'Lines',     {},    @iscell);
 parse(p, filename, varargin{:});
 
 FWHM    = p.Results.FWHM;
@@ -51,7 +56,10 @@ do_plot = p.Results.plot;
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-lines = G09_read_lines(filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    lines = G09_read_lines(filename);
+end
 N     = numel(lines);
 
 % -------------------------------------------------------------------------

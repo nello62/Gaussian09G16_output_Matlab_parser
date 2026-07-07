@@ -36,6 +36,7 @@ addRequired(p,  'filename',    @ischar);
 addParameter(p, 'orientation', 'auto',  @(x) ischar(x) && ...
     any(strcmpi(x, {'standard','input','auto'})));
 addParameter(p, 'step',        'last',  @(x) ischar(x) || isnumeric(x));
+addParameter(p, 'Lines',       {},      @iscell);
 parse(p, filename, varargin{:});
 
 ori_pref = lower(p.Results.orientation);
@@ -44,15 +45,16 @@ step_req = p.Results.step;
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-if ~isfile(filename)
-    error('G16_structure: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_structure: file not found: %s', filename);
+    end
+    fid = fopen(filename, 'r');
+    raw = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
 end
-
-fid = fopen(filename, 'r');
-raw = fread(fid, '*char')';
-fclose(fid);
-
-lines = strsplit(raw, newline);
 
 % -------------------------------------------------------------------------
 % Atomic number -> symbol table

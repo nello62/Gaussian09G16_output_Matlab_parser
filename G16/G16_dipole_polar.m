@@ -50,16 +50,20 @@ function dp = G16_dipole_polar(filename, varargin)
 p = inputParser;
 addRequired(p,  'filename', @ischar);
 addParameter(p, 'units',    'au', @ischar);
+addParameter(p, 'Lines',    {},   @iscell);
 parse(p, filename, varargin{:});
 units = lower(p.Results.units);
 
-if ~isfile(filename)
-    error('G16_dipole_polar: file not found: %s', filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_dipole_polar: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
 end
-fid  = fopen(filename, 'r');
-raw  = fread(fid, '*char')';
-fclose(fid);
-lines = strsplit(raw, newline);
 N = numel(lines);
 
 % -------------------------------------------------------------------------

@@ -20,6 +20,12 @@ function mol = G09_structure(filename, varargin)
 %       .orientation char                 always 'Input orientation'
 %       .filename    char
 %
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines (from G09_READ_LINES
+%                  or this function's own reader), to skip re-reading the
+%                  file when it has already been read elsewhere (e.g.
+%                  G09_READ_ALL). Default {} (read the file normally).
+%
 %   Example:
 %       mol = G09_structure('indaco.log');
 %       mol = G09_structure('indaco.log', 'step', 1);
@@ -30,24 +36,28 @@ function mol = G09_structure(filename, varargin)
 p = inputParser;
 addRequired(p,  'filename', @ischar);
 addParameter(p, 'step',     'last', @(x) ischar(x) || isnumeric(x));
+addParameter(p, 'Lines',    {},     @iscell);
 parse(p, filename, varargin{:});
 step_req = p.Results.step;
 
 % -------------------------------------------------------------------------
 % Read file  (G09 uses CRLF + latin-1 encoding)
 % -------------------------------------------------------------------------
-if ~isfile(filename)
-    error('G09_structure: file not found: %s', filename);
-end
-fid  = fopen(filename, 'r', 'n', 'ISO-8859-1');
-raw  = fread(fid, '*char')';
-fclose(fid);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G09_structure: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r', 'n', 'ISO-8859-1');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
 
-% Normalise line endings: remove \r
-raw   = strrep(raw, sprintf('\r\n'), newline);
-raw   = strrep(raw, sprintf('\r'),   newline);
-lines = strsplit(raw, newline);
-N     = numel(lines);
+    % Normalise line endings: remove \r
+    raw   = strrep(raw, sprintf('\r\n'), newline);
+    raw   = strrep(raw, sprintf('\r'),   newline);
+    lines = strsplit(raw, newline);
+end
+N = numel(lines);
 
 % -------------------------------------------------------------------------
 % Z -> symbol table

@@ -23,15 +23,25 @@ function en = G09_energy(filename, varargin)
 %       .G_kJ         G in kJ/mol
 %       .H_kJ         H in kJ/mol
 %       .filename     char
+%
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines (from G09_READ_LINES),
+%                  to skip re-reading the file when it has already been
+%                  read elsewhere (e.g. G09_READ_ALL). Default {} (read
+%                  the file normally).
 
 % -------------------------------------------------------------------------
 p = inputParser;
 addRequired(p,  'filename', @ischar);
 addParameter(p, 'step',     'last', @(x) ischar(x) || isnumeric(x));
+addParameter(p, 'Lines',    {},     @iscell);
 parse(p, filename, varargin{:});
 step_req = p.Results.step;
 
-lines = G09_read_lines(filename);
+lines = p.Results.Lines;
+if isempty(lines)
+    lines = G09_read_lines(filename);
+end
 
 % -------------------------------------------------------------------------
 % Collect all SCF Done lines

@@ -45,6 +45,10 @@ function ch = G09_charges(filename, varargin)
 %       'DipoleUnits'     - units used to display |mu| (arrow label and
 %                           command-window table) when 'ShowDipole' is
 %                           true: 'Debye' (default) | 'au'
+%       'Lines'           - pre-read cell array of file lines (from
+%                           G09_READ_LINES), to skip re-reading the file
+%                           when it has already been read elsewhere
+%                           (e.g. G09_READ_ALL). Default {} (read normally).
 %
 %   OUTPUT  struct ch with fields:
 %       .symbols        {Natoms x 1}   atomic symbols
@@ -86,6 +90,7 @@ addParameter(p, 'DipoleLineWidth', 2.5,        @isnumeric);
 addParameter(p, 'ShowDipoleLabel', true,       @islogical);
 addParameter(p, 'DipoleFontSize',  11,         @isnumeric);
 addParameter(p, 'DipoleUnits',     'Debye',    @ischar);
+addParameter(p, 'Lines',           {},         @iscell);
 parse(p, filename, varargin{:});
 
 charge_type = p.Results.type;
@@ -120,8 +125,11 @@ DEBYE_TO_AU = 0.393430;   % 1 Debye = 0.393430 a.u. (1 a.u. = 2.541746 Debye)
 % -------------------------------------------------------------------------
 % Read file
 % -------------------------------------------------------------------------
-lines = G09_read_lines(filename);
-N     = numel(lines);
+lines = p.Results.Lines;
+if isempty(lines)
+    lines = G09_read_lines(filename);
+end
+N = numel(lines);
 
 % -------------------------------------------------------------------------
 % Locate charge blocks using fuzzy matching
@@ -275,7 +283,7 @@ ch.dipole_au     = [];
 mol = [];   % loaded lazily, at most once, by whichever block needs it first
 if show_dipole
     try
-        dp = G09_dipole_polar(filename, 'units', 'Debye');
+        dp = G09_dipole_polar(filename, 'units', 'Debye', 'Lines', lines);
         mu = local_extract_dipole(dp);
     catch ME
         warning('G09_charges:dipoleReadFailed', ...

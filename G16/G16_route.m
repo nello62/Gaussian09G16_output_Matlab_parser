@@ -1,9 +1,14 @@
-function route = G16_route(filename)
+function route = G16_route(filename, varargin)
 % G16_ROUTE  Extracts the route section from a Gaussian 16 .out/.log file.
 %
 %   route = G16_ROUTE(filename)
 %
 %   OUTPUT  char — full route section string (on a single line)
+%
+%   Optional parameters:
+%       'Lines'  - pre-read cell array of file lines, to skip re-reading
+%                  the file when it has already been read elsewhere (e.g.
+%                  G16_READ_ALL). Default {} (read the file normally).
 %
 %   Example:
 %       r = G16_route('V_E00t.out')
@@ -12,14 +17,21 @@ function route = G16_route(filename)
 %   Note: collects the lines between the two '------' separators that follow
 %         the first '#' line (i.e. the standard Gaussian route block).
 
-if ~isfile(filename)
-    error('G16_route: file not found: %s', filename);
-end
+p = inputParser;
+addRequired(p,  'filename', @ischar);
+addParameter(p, 'Lines',    {}, @iscell);
+parse(p, filename, varargin{:});
 
-fid  = fopen(filename, 'r');
-raw  = fread(fid, '*char')';
-fclose(fid);
-lines = strsplit(raw, newline);
+lines = p.Results.Lines;
+if isempty(lines)
+    if ~isfile(filename)
+        error('G16_route: file not found: %s', filename);
+    end
+    fid  = fopen(filename, 'r');
+    raw  = fread(fid, '*char')';
+    fclose(fid);
+    lines = strsplit(raw, newline);
+end
 N = numel(lines);
 
 % The route section in G16 is delimited by two '----' lines
