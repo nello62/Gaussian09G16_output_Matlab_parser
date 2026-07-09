@@ -92,6 +92,30 @@ installed on your machine (returns a `table`, filterable by description).
 All Name-Value options, output struct fields, and examples are documented in
 each function's own help text (`help G16_charges`, etc.).
 
+## Python port
+
+A Python 3 port of the G16 toolbox lives in [`G16parser/`](G16parser/) —
+data extraction plus static matplotlib plots (no interactive `modeViewer`
+GUI). Installable as a standard package:
+
+```bash
+cd G16parser
+pip install -e .
+```
+
+```python
+import G16parser as g16
+
+mol = g16.g16_structure('molecule.out')
+g16.g16_draw_molecule(mol, show_axes=True)
+
+T = g16.g16_read_all('molecule.out')   # everything in one call, single file read
+```
+
+See [`G16parser/README.md`](G16parser/README.md) for the full function
+reference and [`G16parser/example.py`](G16parser/example.py) for a runnable
+end-to-end example.
+
 ## License
 
 See [`LICENSE`](LICENSE).
