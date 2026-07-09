@@ -3,7 +3,7 @@
 Python port of the G16/ MATLAB toolbox (data extraction + static
 matplotlib plots; the interactive G16_modeViewer GUI is not included).
 
-    from G16_python import g16_structure, g16_charges, g16_read_all
+    from G16parser import g16_structure, g16_charges, g16_read_all
     mol = g16_structure('molecule.out')
     T = g16_read_all('molecule.out')
 """

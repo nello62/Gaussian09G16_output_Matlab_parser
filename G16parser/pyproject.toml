@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "G16parser"
+version = "0.1.0"
+description = "Parser and static-plot toolbox for Gaussian 16 .out/.log files (Python port of the G16 MATLAB toolbox)"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

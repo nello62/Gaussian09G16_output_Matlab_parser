@@ -1,4 +1,4 @@
-# G16_python
+# G16parser
 
 Python 3 port of the `G16/` MATLAB toolbox — parses and visualises Gaussian 16
 `.out`/`.log`/`.fchk` files. Data-extraction functions plus static
@@ -14,11 +14,18 @@ matplotlib
 
 ## Install / use
 
-No packaging yet — just make sure the parent folder is on `sys.path` (or
-run from `G16_python`'s parent directory) and import directly:
+Installable as a standard Python package (editable install, so local edits
+take effect immediately without reinstalling):
+
+```
+cd G16parser
+pip install -e .
+```
+
+Then, from any folder/script:
 
 ```python
-import G16_python as g16
+import G16parser as g16
 
 mol = g16.g16_structure('molecule.out')
 g16.g16_draw_molecule(mol, show_axes=True)
@@ -76,7 +83,7 @@ python3 example.py path/to/molecule.out
   some older matplotlib releases, interactively rotating a 3D plot with the
   native Cocoa backend can segfault the whole Python process. If you need a
   different backend, call `matplotlib.use(...)` yourself *before* importing
-  `G16_python`.
+  `G16parser`.
 - A discovered bug in the original `G16_tddft.m`: MATLAB's `regexp` drops
   the optional trailing `<S**2>=` capture group entirely (a MATLAB-specific
   regex-engine quirk), so `td.S2` is always `NaN` in MATLAB even when the

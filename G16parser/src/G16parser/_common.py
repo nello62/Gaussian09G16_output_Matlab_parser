@@ -1,7 +1,7 @@
 """Shared helpers used across the G16 Python toolbox.
 
 Not part of the public API — import functions from the top-level
-``G16_python`` package instead (e.g. ``from G16_python import g16_structure``).
+``G16parser`` package instead (e.g. ``from G16parser import g16_structure``).
 """
 
 import re
@@ -23,10 +23,10 @@ if "matplotlib.pyplot" not in sys.modules:
         pass
 else:
     warnings.warn(
-        "matplotlib.pyplot was imported before G16_python: could not switch "
+        "matplotlib.pyplot was imported before G16parser: could not switch "
         "to the safer TkAgg backend. On macOS, interactively rotating a 3D "
         "plot with the native backend may crash the whole process. Fix: "
-        "'import G16_python' before 'import matplotlib.pyplot', or call "
+        "'import G16parser' before 'import matplotlib.pyplot', or call "
         "matplotlib.use('TkAgg') yourself before importing pyplot."
     )
 

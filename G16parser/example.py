@@ -1,20 +1,17 @@
-"""Basic usage example for the G16_python toolbox.
+"""Basic usage example for the G16parser toolbox.
+
+Requires G16parser to be installed (pip install -e . from this folder).
 
 Run with:
     python3 example.py path/to/molecule.out
 """
-import os
 import sys
 
-# Make "import G16_python" work when this file is run directly
-# (python3 example.py ...), not just as a module (-m G16_python.example).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Import G16_python BEFORE matplotlib.pyplot: the package switches the
+# Import G16parser BEFORE matplotlib.pyplot: the package switches the
 # matplotlib backend to TkAgg on import (see _common.py) to avoid a
 # native-macOS-backend segfault during interactive 3D rotation, but it
 # can only do that if pyplot has not been imported yet.
-import G16_python as g16
+import G16parser as g16
 import matplotlib.pyplot as plt
 
 
@@ -34,11 +31,14 @@ def main(filename):
     # HOMO/LUMO
     oe = g16.g16_orbital_energies(filename)
     print(f"HOMO-LUMO gap: {oe.gap_eV:.3f} eV")
-
+    # Mode
+    nm=g16.g16_nmodes(filename) 
+    
     # --- Figures -----------------------------------------------------
     g16.g16_draw_molecule(mol, show_axes=True)
     g16.g16_draw_orbital(oe)
-
+    g16.g16_draw_mode(mol, nm, 60)
+    
     # Tip: g16.g16_read_all(filename) runs everything above (and more)
     # in a single call, reading the file from disk only once.
 
