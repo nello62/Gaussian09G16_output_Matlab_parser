@@ -6,6 +6,7 @@ Not part of the public API — import functions from the top-level
 
 import re
 import sys
+import warnings
 
 # Prefer TkAgg over the native macOS ("MacOSX"/"macosx") backend: on some
 # older matplotlib releases (observed with 3.1.1 on macOS 14), interactively
@@ -20,6 +21,14 @@ if "matplotlib.pyplot" not in sys.modules:
         matplotlib.use("TkAgg")
     except Exception:
         pass
+else:
+    warnings.warn(
+        "matplotlib.pyplot was imported before G16_python: could not switch "
+        "to the safer TkAgg backend. On macOS, interactively rotating a 3D "
+        "plot with the native backend may crash the whole process. Fix: "
+        "'import G16_python' before 'import matplotlib.pyplot', or call "
+        "matplotlib.use('TkAgg') yourself before importing pyplot."
+    )
 
 # Registers the '3d' projection with matplotlib. Required explicitly on
 # older matplotlib releases (<3.2ish) where it isn't auto-registered just

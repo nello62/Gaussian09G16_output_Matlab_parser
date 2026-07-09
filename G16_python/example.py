@@ -10,9 +10,12 @@ import sys
 # (python3 example.py ...), not just as a module (-m G16_python.example).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import matplotlib.pyplot as plt
-
+# Import G16_python BEFORE matplotlib.pyplot: the package switches the
+# matplotlib backend to TkAgg on import (see _common.py) to avoid a
+# native-macOS-backend segfault during interactive 3D rotation, but it
+# can only do that if pyplot has not been imported yet.
 import G16_python as g16
+import matplotlib.pyplot as plt
 
 
 def main(filename):
