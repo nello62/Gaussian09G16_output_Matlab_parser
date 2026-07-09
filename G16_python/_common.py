@@ -5,6 +5,21 @@ Not part of the public API — import functions from the top-level
 """
 
 import re
+import sys
+
+# Prefer TkAgg over the native macOS ("MacOSX"/"macosx") backend: on some
+# older matplotlib releases (observed with 3.1.1 on macOS 14), interactively
+# rotating a 3D plot with the native Cocoa backend can segfault the whole
+# Python process (a bug in matplotlib/macOS's CoreGraphics image lifecycle
+# handling, not in this toolbox's code). Only switches if pyplot has not
+# been imported yet, and never overrides a backend the caller already set;
+# silently does nothing if Tk is unavailable (e.g. Tk-less Python builds).
+if "matplotlib.pyplot" not in sys.modules:
+    try:
+        import matplotlib
+        matplotlib.use("TkAgg")
+    except Exception:
+        pass
 
 # Registers the '3d' projection with matplotlib. Required explicitly on
 # older matplotlib releases (<3.2ish) where it isn't auto-registered just

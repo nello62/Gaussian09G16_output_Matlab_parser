@@ -71,6 +71,12 @@ python3 example.py path/to/molecule.out
   uses this to read the file exactly once.
 - 3D plots use matplotlib's `mplot3d`; there is no MATLAB-style
   `rotate3d` — use the interactive backend's normal mouse/toolbar controls.
+- The package forces the `TkAgg` matplotlib backend (if Tk is available and
+  pyplot hasn't been imported yet) instead of the native macOS backend: on
+  some older matplotlib releases, interactively rotating a 3D plot with the
+  native Cocoa backend can segfault the whole Python process. If you need a
+  different backend, call `matplotlib.use(...)` yourself *before* importing
+  `G16_python`.
 - A discovered bug in the original `G16_tddft.m`: MATLAB's `regexp` drops
   the optional trailing `<S**2>=` capture group entirely (a MATLAB-specific
   regex-engine quirk), so `td.S2` is always `NaN` in MATLAB even when the
