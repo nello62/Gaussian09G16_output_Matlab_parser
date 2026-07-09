@@ -34,6 +34,12 @@ T = g16.g16_read_all('molecule.out')   # everything in one call, single file rea
 Every function returns a `Struct` (attribute access, e.g. `mol.xyz`,
 `ch.dipole_Debye`) — the Python equivalent of the MATLAB struct outputs.
 
+See [`example.py`](example.py) for a short, runnable end-to-end example:
+
+```
+python3 example.py path/to/molecule.out
+```
+
 ## Function reference
 
 | Function | Description |
