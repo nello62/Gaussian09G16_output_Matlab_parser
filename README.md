@@ -34,10 +34,16 @@ G16_draw_orbital(oe);                           % energy-level diagram with HOMO
 
 nm = G16_nmodes('molecule.out');
 G16_modeViewer('molecule.out');                 % interactive vibrational-mode browser
+
+T = G16_read_all('molecule.out');               % everything above in one call
 ```
 
 Every extraction function also prints a formatted summary to the command
 window, and returns a struct so results can be used programmatically.
+
+`read_all` reads the output file from disk only **once** and reuses the
+parsed lines across every sub-function (via their shared `'Lines'`
+parameter), instead of each one re-opening and re-parsing the file.
 
 ## Function reference
 
@@ -60,6 +66,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `route` | Route section string |
 | `get_bond_length` | Bond-length table from covalent radii |
 | `gaussian_version` | Detects the Gaussian version/revision that produced the file (works on `.fchk` via a sibling `.log`/`.out`) |
+| `read_all` | Runs the full extraction set in one call, reading the file only once |
 | `fchk_read` *(G09 only)* | Reads a Gaussian formatted checkpoint (`.fchk`) file |
 | `charges_fchk` *(G09 only)* | Visualises charges from a `fchk_read` struct |
 | `restart` *(G09 only)* | Generates a `.gjf` restart input file |
