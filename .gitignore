@@ -4,8 +4,13 @@
 /*
 !/G09/
 !/G16/
+!/G16_python/
 !/.gitignore
 !/README.md
+
+# Python cache/build junk, even inside the tracked folder
+**/__pycache__/
+**/*.pyc
 
 # Editor/OS junk, even inside the tracked folders
 **/.DS_Store
