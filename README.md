@@ -95,8 +95,9 @@ each function's own help text (`help G16_charges`, etc.).
 ## Python port
 
 A Python 3 port of the G16 toolbox lives in [`G16parser/`](G16parser/) —
-data extraction plus static matplotlib plots (no interactive `modeViewer`
-GUI). Installable as a standard package:
+data extraction, static matplotlib plots, and an interactive Tkinter
+vibrational-mode viewer (`g16_mode_viewer`). Installable as a standard
+package:
 
 ```bash
 cd G16parser

@@ -1,8 +1,8 @@
 # G16parser
 
 Python 3 port of the `G16/` MATLAB toolbox — parses and visualises Gaussian 16
-`.out`/`.log`/`.fchk` files. Data-extraction functions plus static
-matplotlib plots; the interactive `G16_modeViewer` GUI is **not** ported.
+`.out`/`.log`/`.fchk` files. Data-extraction functions, static matplotlib
+plots, and an interactive Tkinter vibrational-mode viewer.
 
 ## Requirements
 
@@ -69,6 +69,8 @@ python3 example.py path/to/molecule.out
 | `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D) |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `g16_draw_orbital` | Orbital energy-level diagram with HOMO-LUMO gap arrow |
+| `g16_mode_viewer` | Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity |
+| `g16_list` | Lists every function in the toolbox with its one-line description (pandas DataFrame) |
 
 ## Notes on the port
 
@@ -89,3 +91,18 @@ python3 example.py path/to/molecule.out
   regex-engine quirk), so `td.S2` is always `NaN` in MATLAB even when the
   tag is present in the file. This Python port's `re`-based parser does not
   have that bug and extracts `S2` correctly.
+- `g16_mode_viewer` is a Tkinter rewrite of `G16_modeViewer.m`'s `uifigure`
+  GUI (same controls: mode selector, order-by, per-option redraw, title,
+  save-as PDF/EPS/JPEG). One simplification: "target figure" always means
+  the most recently drawn mode window, not whichever window the user last
+  clicked on (MATLAB's `groot().CurrentFigure` has no simple Tkinter
+  equivalent). In an IPython/Spyder console with the Tk graphics backend
+  active, the viewer detects the running event loop and returns to the
+  prompt immediately instead of blocking; run as a plain script, it blocks
+  until the viewer window is closed.
+- **Known issue:** `g16_mode_viewer` can segfault when run from *inside*
+  Spyder's IPython console (crash inside ipykernel's own periodic Tk
+  event-loop pump, not in this toolbox's code) — confirmed working
+  correctly when run from a plain terminal/script instead:
+  `python3 -c "import G16parser as g16; g16.g16_mode_viewer('file.out')"`.
+  All other functions (including static plots) work fine inside Spyder.

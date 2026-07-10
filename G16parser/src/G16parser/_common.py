@@ -22,13 +22,21 @@ if "matplotlib.pyplot" not in sys.modules:
     except Exception:
         pass
 else:
-    warnings.warn(
-        "matplotlib.pyplot was imported before G16parser: could not switch "
-        "to the safer TkAgg backend. On macOS, interactively rotating a 3D "
-        "plot with the native backend may crash the whole process. Fix: "
-        "'import G16parser' before 'import matplotlib.pyplot', or call "
-        "matplotlib.use('TkAgg') yourself before importing pyplot."
-    )
+    import matplotlib
+    # Some environments (e.g. Spyder/IPython with the Graphics backend set
+    # to Tkinter/Automatic) pre-import pyplot at kernel startup with TkAgg
+    # already active — that's exactly what we want, so only warn if the
+    # backend actually in use is NOT Tk-based (a real risk of the crash
+    # described above).
+    if "tk" not in matplotlib.get_backend().lower():
+        warnings.warn(
+            "matplotlib.pyplot was imported before G16parser with backend "
+            f"'{matplotlib.get_backend()}': could not switch to the safer "
+            "TkAgg backend. On macOS, interactively rotating a 3D plot with "
+            "the native backend may crash the whole process. Fix: "
+            "'import G16parser' before 'import matplotlib.pyplot', or call "
+            "matplotlib.use('TkAgg') yourself before importing pyplot."
+        )
 
 # Registers the '3d' projection with matplotlib. Required explicitly on
 # older matplotlib releases (<3.2ish) where it isn't auto-registered just

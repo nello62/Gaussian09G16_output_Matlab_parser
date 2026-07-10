@@ -1,7 +1,7 @@
 """G16 Python toolbox — parses and visualises Gaussian 16 .out/.log files.
 
-Python port of the G16/ MATLAB toolbox (data extraction + static
-matplotlib plots; the interactive G16_modeViewer GUI is not included).
+Python port of the G16/ MATLAB toolbox: data extraction, static
+matplotlib plots, and an interactive Tkinter vibrational-mode viewer.
 
     from G16parser import g16_structure, g16_charges, g16_read_all
     mol = g16_structure('molecule.out')
@@ -27,6 +27,8 @@ from .read_all import g16_read_all
 from .draw_molecule import g16_draw_molecule
 from .draw_mode import g16_draw_mode
 from .draw_orbital import g16_draw_orbital
+from .mode_viewer import g16_mode_viewer
+from .toolbox_list import g16_list
 
 __all__ = [
     "Struct",
@@ -35,4 +37,5 @@ __all__ = [
     "g16_charges", "g16_nmodes", "g16_spectra", "g16_orbital_energies",
     "g16_get_bond_length", "g16_hyperpolar", "g16_tddft", "g16_read_all",
     "g16_draw_molecule", "g16_draw_mode", "g16_draw_orbital",
+    "g16_mode_viewer", "g16_list",
 ]
