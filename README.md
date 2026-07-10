@@ -87,6 +87,7 @@ installed on your machine (returns a `table`, filterable by description).
 | Function | Description |
 |---|---|
 | `list` | Lists every function in the toolbox with its one-line description |
+| `write_report` | Writes a formatted text report (.txt) from a `read_all` struct |
 | `read_lines` *(G09 only)* | Shared file-reading helper used internally |
 
 All Name-Value options, output struct fields, and examples are documented in
