@@ -36,6 +36,7 @@ oe = g16.g16_orbital_energies('molecule.out')
 g16.g16_draw_orbital(oe)
 
 T = g16.g16_read_all('molecule.out')   # everything in one call, single file read
+g16.g16_write_report(T)                # -> molecule_report.txt
 ```
 
 Every function returns a `Struct` (attribute access, e.g. `mol.xyz`,
@@ -66,6 +67,7 @@ python3 example.py path/to/molecule.out
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
 | `g16_read_all` | Runs the full extraction set in one call, reading the file only once |
+| `g16_write_report` | Writes a formatted text report (.txt) from a `g16_read_all` Struct |
 | `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D) |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `g16_draw_orbital` | Orbital energy-level diagram with HOMO-LUMO gap arrow |

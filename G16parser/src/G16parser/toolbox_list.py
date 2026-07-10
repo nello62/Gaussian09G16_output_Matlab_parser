@@ -17,13 +17,14 @@ from .route import g16_route
 from .spectra import g16_spectra
 from .structure import g16_structure
 from .tddft import g16_tddft
+from .write_report import g16_write_report
 
 _FUNCTIONS = [
     g16_gaussian_version, g16_charge_mult, g16_route, g16_structure, g16_energy,
     g16_convergence, g16_dipole_polar, g16_charges, g16_nmodes, g16_spectra,
     g16_orbital_energies, g16_get_bond_length, g16_hyperpolar, g16_tddft,
     g16_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
-    g16_mode_viewer,
+    g16_mode_viewer, g16_write_report,
 ]
 
 
