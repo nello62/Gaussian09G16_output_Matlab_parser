@@ -1,5 +1,7 @@
 # Gaussian09G16_output_Matlab_parser
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21302268.svg)](https://doi.org/10.5281/zenodo.21302268)
+
 MATLAB toolbox for parsing and visualising **Gaussian 09** and **Gaussian 16**
 output files (`.out` / `.log` / `.fchk`) — molecular structure, energies,
 charges, dipole moment and polarisability, vibrational normal modes, IR/Raman
