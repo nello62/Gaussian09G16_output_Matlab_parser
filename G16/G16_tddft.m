@@ -81,8 +81,14 @@ while k <= N
     ln = lines{k};
 
     % ── "Excited State N: ..." header line
+    % NOTE: <S**2>= used to be captured as a trailing optional group
+    % (?:...)? tacked onto this same pattern, but MATLAB's regexp engine
+    % silently drops a trailing optional capture group even when it
+    % matches (confirmed with 'tokens','once', plain 'tokens', and
+    % 'names' — all three drop it). Extracting it with its own
+    % independent regexp below is the reliable fix.
     tok = regexp(ln, ...
-        'Excited State\s+(\d+):\s+(\S+)\s+([\d.]+)\s+eV\s+([\d.]+)\s+nm\s+f=([\d.]+)(?:\s+<S\*\*2>=([\d.]+))?', ...
+        'Excited State\s+(\d+):\s+(\S+)\s+([\d.]+)\s+eV\s+([\d.]+)\s+nm\s+f=([\d.]+)', ...
         'tokens', 'once');
 
     if ~isempty(tok)
@@ -96,8 +102,9 @@ while k <= N
         st_eV(end+1)   = str2double(tok{3});          %#ok<AGROW>
         st_nm(end+1)   = str2double(tok{4});          %#ok<AGROW>
         st_f(end+1)    = str2double(tok{5});          %#ok<AGROW>
-        if numel(tok) >= 6 && ~isempty(tok{6})
-            st_S2(end+1) = str2double(tok{6});        %#ok<AGROW>
+        tokS2 = regexp(ln, '<S\*\*2>=([\d.]+)', 'tokens', 'once');
+        if ~isempty(tokS2)
+            st_S2(end+1) = str2double(tokS2{1});      %#ok<AGROW>
         else
             st_S2(end+1) = NaN;                       %#ok<AGROW>
         end

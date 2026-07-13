@@ -88,11 +88,15 @@ python3 example.py path/to/molecule.out
   native Cocoa backend can segfault the whole Python process. If you need a
   different backend, call `matplotlib.use(...)` yourself *before* importing
   `G16parser`.
-- A discovered bug in the original `G16_tddft.m`: MATLAB's `regexp` drops
-  the optional trailing `<S**2>=` capture group entirely (a MATLAB-specific
-  regex-engine quirk), so `td.S2` is always `NaN` in MATLAB even when the
-  tag is present in the file. This Python port's `re`-based parser does not
-  have that bug and extracts `S2` correctly.
+- A bug discovered in the original `G16_tddft.m` (fixed 2026-07-13): MATLAB's
+  `regexp` drops a trailing optional `<S**2>=` capture group entirely (a
+  MATLAB-specific regex-engine quirk — confirmed with `'tokens','once'`,
+  plain `'tokens'`, and `'names'`), so `td.S2` used to always be `NaN` in
+  MATLAB even when the tag was present. Fixed in MATLAB by extracting
+  `<S**2>=` with its own independent `regexp` call instead of a trailing
+  optional group. This Python port's `re`-based parser never had the bug
+  (Python's `re` handles trailing optional groups correctly) and has always
+  extracted `S2` correctly.
 - `g16_mode_viewer` is a Tkinter rewrite of `G16_modeViewer.m`'s `uifigure`
   GUI (same controls: mode selector, order-by, per-option redraw, title,
   save-as PDF/EPS/JPEG). One simplification: "target figure" always means
