@@ -415,7 +415,7 @@ drawMode(itemsData(1), false);
         end
         ax = findall(target, 'Type', 'Axes');
         if ~isempty(ax)
-            title(ax(1), newTitle, 'Interpreter', 'none');
+            title(ax(1), newTitle, 'Interpreter', 'tex');
         end
         target.Name = newTitle;
     end
