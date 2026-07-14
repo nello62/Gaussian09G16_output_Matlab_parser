@@ -36,7 +36,7 @@ def g16_draw_mode(mol, nm, mode_idx, scale=1.5, arrow_color=(1.0, 0.4, 0.1),
         raise ValueError(f"g16_draw_mode: mol.Natoms ({mol.Natoms}) does not match nm.Natoms ({nm.Natoms})")
 
     i0 = mode_idx - 1
-    freq_str = f"Mode {mode_idx}  -  {nm.freq[i0]:.1f} cm-1"
+    freq_str = f"Mode {mode_idx}  -  {nm.freq[i0]:.1f} cm$^{{-1}}$"
     if nm.has_Raman:
         freq_str += f"   IR={nm.IR[i0]:.1f}   Raman={nm.Raman[i0]:.1f}"
 
