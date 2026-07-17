@@ -27,6 +27,7 @@ from .read_all import g16_read_all
 from .draw_molecule import g16_draw_molecule
 from .draw_mode import g16_draw_mode
 from .draw_orbital import g16_draw_orbital
+from .animate_mode import g16_animate_mode
 from .mode_viewer import g16_mode_viewer
 from .toolbox_list import g16_list
 from .write_report import g16_write_report
@@ -38,5 +39,5 @@ __all__ = [
     "g16_charges", "g16_nmodes", "g16_spectra", "g16_orbital_energies",
     "g16_get_bond_length", "g16_hyperpolar", "g16_tddft", "g16_read_all",
     "g16_draw_molecule", "g16_draw_mode", "g16_draw_orbital",
-    "g16_mode_viewer", "g16_list", "g16_write_report",
+    "g16_animate_mode", "g16_mode_viewer", "g16_list", "g16_write_report",
 ]

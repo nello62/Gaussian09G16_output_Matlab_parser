@@ -71,7 +71,8 @@ python3 example.py path/to/molecule.out
 | `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D) |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `g16_draw_orbital` | Orbital energy-level diagram with HOMO-LUMO gap arrow |
-| `g16_mode_viewer` | Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity |
+| `g16_animate_mode` | Exports an MP4 animation of a vibrational mode (requires `ffmpeg`) |
+| `g16_mode_viewer` | Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity, with an "Animate mode (MP4)..." button |
 | `g16_list` | Lists every function in the toolbox with its one-line description (pandas DataFrame) |
 
 ## Notes on the port
@@ -112,3 +113,17 @@ python3 example.py path/to/molecule.out
   correctly when run from a plain terminal/script instead:
   `python3 -c "import G16parser as g16; g16.g16_mode_viewer('file.out')"`.
   All other functions (including static plots) work fine inside Spyder.
+- `g16_animate_mode` requires **`ffmpeg`** installed and on `PATH` —
+  matplotlib does not bundle a video encoder itself:
+  `brew install ffmpeg` (macOS) or `sudo apt install ffmpeg` (Ubuntu/Debian).
+  Without it, the call fails with `FileNotFoundError: ... 'ffmpeg'` at the
+  final encoding step (frame generation itself does not require ffmpeg).
+  By default the animation uses matplotlib's default 3D view; pass
+  `view=(ax.azim, ax.elev)` to start from a figure's current orientation
+  instead (`g16_mode_viewer`'s "Animate mode (MP4)..." button does this
+  automatically, using whichever mode figure is currently displayed).
+  Bonds are computed once from the equilibrium geometry (via
+  `g16_get_bond_length`) and kept fixed across all frames, instead of
+  being re-detected from instantaneous distances every frame — otherwise
+  bonds flicker in and out as atoms oscillate past the `bond_tol`
+  threshold.

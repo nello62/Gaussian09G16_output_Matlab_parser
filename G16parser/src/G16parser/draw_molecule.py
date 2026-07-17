@@ -30,13 +30,19 @@ def _draw_cartesian_axes(ax, origin, axes_length):
 
 def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
                        show_legend=True, title="", bg_color=(0.95, 0.95, 0.95),
-                       ax=None, show_axes=False, axes_length=None):
+                       ax=None, show_axes=False, axes_length=None, bond_list=None):
     """Renders a 3D CPK ball-and-stick model from the mol struct (matplotlib,
     static — no interactive rotation widget, unlike the MATLAB original's
     ``rotate3d``; use the normal matplotlib 3D toolbar/mouse controls
     instead when shown in an interactive backend).
 
     Parameters mirror G16_draw_molecule.m — see its docstring for details.
+    bond_list : array-like (Nbonds, 2) of 0-based atom-index pairs,
+        optional — draws exactly these bonds instead of auto-detecting
+        from bond_tol. Useful to keep a fixed bond topology across a
+        series of frames where atoms move (e.g. g16_animate_mode), so
+        bonds do not appear/disappear as instantaneous distances cross
+        the bond_tol threshold.
 
     Returns
     -------
@@ -66,15 +72,21 @@ def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
     # -----------------------------------------------------------------
     xyz = mol.xyz
     symbols = mol.symbols
-    for i in range(mol.Natoms):
-        ri = get_radius(symbols[i])
-        for j in range(i + 1, mol.Natoms):
-            rj = get_radius(symbols[j])
-            d = np.linalg.norm(xyz[i] - xyz[j])
-            if d < (ri + rj) * bond_tol:
-                p1, p2 = xyz[i], xyz[j]
-                ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
-                        color=(0.5, 0.5, 0.5), linewidth=2.0)
+    if bond_list is None:
+        for i in range(mol.Natoms):
+            ri = get_radius(symbols[i])
+            for j in range(i + 1, mol.Natoms):
+                rj = get_radius(symbols[j])
+                d = np.linalg.norm(xyz[i] - xyz[j])
+                if d < (ri + rj) * bond_tol:
+                    p1, p2 = xyz[i], xyz[j]
+                    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
+                            color=(0.5, 0.5, 0.5), linewidth=2.0)
+    else:
+        for i, j in bond_list:
+            p1, p2 = xyz[i], xyz[j]
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
+                    color=(0.5, 0.5, 0.5), linewidth=2.0)
 
     # -----------------------------------------------------------------
     # Atoms (spheres), heavy elements first, H last (for the legend order)

@@ -82,7 +82,8 @@ installed on your machine (returns a `table`, filterable by description).
 | `draw_molecule` | 3D CPK ball-and-stick render, with optional Cartesian axes indicator |
 | `draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `draw_orbital` | Orbital energy-level diagram, HOMO-LUMO transition arrow + gap |
-| `modeViewer` | Interactive mode selector/browser window, sortable by mode number, IR, or Raman intensity |
+| `animate_mode` | Exports an MP4 animation of a vibrational mode (oscillating structure, GaussView-style) |
+| `modeViewer` | Interactive mode selector/browser window, sortable by mode number, IR, or Raman intensity, with an "Animate mode (MP4)..." button |
 
 ### Utility
 

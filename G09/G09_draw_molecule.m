@@ -24,6 +24,13 @@ function G09_draw_molecule(mol, varargin)
 %       'AxesLength'   - length of the X/Y/Z arrows, in Angstrom (default:
 %                        [] = auto, 20% of the plotted molecule's
 %                        bounding-box diagonal)
+%       'BondList'     - [Nbonds x 2] explicit atom-index pairs to draw as
+%                        bonds, bypassing the BondTol distance criterion
+%                        (default: [] = auto-detect from BondTol). Useful
+%                        to keep a fixed bond topology across a series of
+%                        frames where atoms move (e.g. G09_ANIMATE_MODE),
+%                        so bonds do not appear/disappear as instantaneous
+%                        distances cross the BondTol threshold.
 %
 %   Example:
 %       mol = G09_structure('zeatin.out');
@@ -45,6 +52,7 @@ addParameter(p, 'BgColor',    [0.95 0.95 0.95], @isnumeric);
 addParameter(p, 'Ax',         [],                @ishandle);
 addParameter(p, 'ShowAxes',   false,             @islogical);
 addParameter(p, 'AxesLength', [],                @isnumeric);
+addParameter(p, 'BondList',   [],                @isnumeric);
 parse(p, mol, varargin{:});
 
 atom_scale   = p.Results.AtomScale;
@@ -56,6 +64,7 @@ bg_color     = p.Results.BgColor;
 ax           = p.Results.Ax;
 show_axes    = p.Results.ShowAxes;
 axes_length  = p.Results.AxesLength;
+bond_list    = p.Results.BondList;
 
 % Validate mol struct
 if ~isstruct(mol) || ~isfield(mol,'symbols') || ~isfield(mol,'xyz')
@@ -133,18 +142,30 @@ camlight(ax, 45, 30);
 % -------------------------------------------------------------------------
 [th, ph] = meshgrid(linspace(0,2*pi,12), linspace(0,pi,8));  % low-resolution spheres for bonds
 
-for i = 1 : mol.Natoms
-    ri = get_radius_local(mol.symbols{i}, cov_radii, default_radius);
-    for j = i+1 : mol.Natoms
-        rj = get_radius_local(mol.symbols{j}, cov_radii, default_radius);
-        d  = norm(mol.xyz(i,:) - mol.xyz(j,:));
-        if d < (ri + rj) * bond_tol
-            p1 = mol.xyz(i,:);
-            p2 = mol.xyz(j,:);
-            line(ax, [p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)], ...
-                 'Color', [0.50 0.50 0.50], 'LineWidth', 2.0, ...
-                 'HandleVisibility', 'off');
+if isempty(bond_list)
+    for i = 1 : mol.Natoms
+        ri = get_radius_local(mol.symbols{i}, cov_radii, default_radius);
+        for j = i+1 : mol.Natoms
+            rj = get_radius_local(mol.symbols{j}, cov_radii, default_radius);
+            d  = norm(mol.xyz(i,:) - mol.xyz(j,:));
+            if d < (ri + rj) * bond_tol
+                p1 = mol.xyz(i,:);
+                p2 = mol.xyz(j,:);
+                line(ax, [p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)], ...
+                     'Color', [0.50 0.50 0.50], 'LineWidth', 2.0, ...
+                     'HandleVisibility', 'off');
+            end
         end
+    end
+else
+    for b = 1 : size(bond_list, 1)
+        i = bond_list(b, 1);
+        j = bond_list(b, 2);
+        p1 = mol.xyz(i,:);
+        p2 = mol.xyz(j,:);
+        line(ax, [p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)], ...
+             'Color', [0.50 0.50 0.50], 'LineWidth', 2.0, ...
+             'HandleVisibility', 'off');
     end
 end
 

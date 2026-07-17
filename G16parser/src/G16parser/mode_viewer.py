@@ -3,6 +3,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 import numpy as np
 
+from .animate_mode import g16_animate_mode
 from .draw_mode import g16_draw_mode
 from .nmodes import g16_nmodes
 from .structure import g16_structure
@@ -213,6 +214,9 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
     save_btn = ttk.Button(save_row, text="Save figure...")
     save_btn.pack(side="left", padx=(10, 0))
 
+    animate_btn = ttk.Button(frm, text="Animate mode (MP4)...")
+    animate_btn.pack(fill="x", pady=(10, 0))
+
     ttk.Label(frm, text=f"{nm.Natoms} atoms  |  {nm.Nmodes} modes  |  file: {filename}",
               foreground="#737373", wraplength=panel_w - 20).pack(anchor="w", pady=(15, 0))
 
@@ -339,6 +343,42 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
         except Exception as e:
             messagebox.showerror("Export error", str(e), parent=root)
 
+    def animate_current_mode():
+        # Starts the animation from whatever camera orientation the
+        # currently displayed mode figure is in (so a manual rotation
+        # carries over), falling back to matplotlib's default 3D view if
+        # no mode figure is open.
+        k = get_selected_mode_idx()
+        out_file = filedialog.asksaveasfilename(
+            title="Save mode animation as", defaultextension=".mp4",
+            filetypes=[("MP4 video", "*.mp4")], initialfile=f"mode_{k}.mp4", parent=root,
+        )
+        if not out_file:
+            return
+
+        view = None
+        target = resolve_target_figure()
+        if target is not None and target.axes:
+            ax_target = target.axes[0]
+            view = (ax_target.azim, ax_target.elev)
+
+        animate_btn.config(text="Rendering...", state="disabled")
+        root.update_idletasks()
+        try:
+            g16_animate_mode(
+                mol, nm, k, filename=out_file,
+                scale=float(scale_var.get()),
+                atom_scale=float(atom_scale_var.get()),
+                bond_tol=float(bond_tol_var.get()),
+                show_labels=bool(show_labels_var.get()),
+                flip_sign=bool(flip_sign_var.get()),
+                view=view,
+            )
+        except Exception as e:
+            messagebox.showerror("g16_animate_mode error", str(e), parent=root)
+        finally:
+            animate_btn.config(text="Animate mode (MP4)...", state="normal")
+
     def on_close():
         import matplotlib.pyplot as plt
         for f in list(state["open_figs"]):
@@ -356,6 +396,7 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
     flip_sign_chk.config(command=on_option_changed)
     apply_title_btn.config(command=apply_title)
     save_btn.config(command=save_current_figure)
+    animate_btn.config(command=animate_current_mode)
     root.protocol("WM_DELETE_WINDOW", on_close)
 
     draw_mode(state["mode_data"][0], close_old=False)

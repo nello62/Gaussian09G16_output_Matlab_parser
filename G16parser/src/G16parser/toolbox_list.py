@@ -1,3 +1,4 @@
+from .animate_mode import g16_animate_mode
 from .charge_mult import g16_charge_mult
 from .charges import g16_charges
 from .convergence import g16_convergence
@@ -24,7 +25,7 @@ _FUNCTIONS = [
     g16_convergence, g16_dipole_polar, g16_charges, g16_nmodes, g16_spectra,
     g16_orbital_energies, g16_get_bond_length, g16_hyperpolar, g16_tddft,
     g16_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
-    g16_mode_viewer, g16_write_report,
+    g16_animate_mode, g16_mode_viewer, g16_write_report,
 ]
 
 
