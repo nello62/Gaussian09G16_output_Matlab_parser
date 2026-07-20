@@ -90,7 +90,12 @@ if isfield(T, 'energy')
         fprintf(fid, 'Thermal H corr. : %.8f Hartree\n', e.H_corr);
         fprintf(fid, 'Thermal G corr. : %.8f Hartree\n', e.G_corr);
         fprintf(fid, 'E0 (SCF+ZPE)    : %.8f Hartree\n', e.E0);
-        fprintf(fid, 'U               : %.8f Hartree\n', e.U);
+        if isfield(e, 'U')
+            u_val = e.U;
+        else
+            u_val = e.SCF + e.U_corr;   % defensive: compute if missing
+        end
+        fprintf(fid, 'U               : %.8f Hartree\n', u_val);
         fprintf(fid, 'H               : %.8f Hartree\n', e.H);
         fprintf(fid, 'G               : %.8f Hartree\n', e.G);
         fprintf(fid, 'T, P            : %.2f K, %.4f atm\n', e.T, e.P);
