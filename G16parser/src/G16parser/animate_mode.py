@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from ._common import Struct
-from .draw_molecule import g16_draw_molecule
+from .draw_molecule import _classify_bond_order, g16_draw_molecule
 from .get_bond_length import g16_get_bond_length
 
 
@@ -77,13 +77,18 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
     ylim = (extreme[:, 1].min() - pad, extreme[:, 1].max() + pad)
     zlim = (extreme[:, 2].min() - pad, extreme[:, 2].max() + pad)
 
-    # Fixed bond list from the equilibrium geometry, so bonds do not
-    # appear/disappear frame to frame as instantaneous distances oscillate
-    # across the bond_tol threshold (g16_draw_molecule's default
-    # distance-based detection would otherwise re-evaluate connectivity
-    # on every frame).
+    # Fixed bond list (and bond order) from the equilibrium geometry, so
+    # bonds do not appear/disappear or flicker between single/double/
+    # triple frame to frame as instantaneous distances oscillate across
+    # the bond_tol threshold (g16_draw_molecule's default distance-based
+    # detection would otherwise re-evaluate both on every frame).
     bond_table = g16_get_bond_length(mol, tolerance=bond_tol, include_h=True)
+    orders = [
+        _classify_bond_order(s1, s2, d)
+        for s1, s2, d in zip(bond_table["Sym1"], bond_table["Sym2"], bond_table["Distance_Ang"])
+    ]
     bond_list = bond_table[["Atom1", "Atom2"]].to_numpy() - 1
+    bond_list = np.column_stack([bond_list, orders])
 
     freq_str = f"Mode {mode_idx} - {nm.freq[i0]:.1f} cm$^{{-1}}$"
     fname = os.path.splitext(os.path.basename(mol.filename))[0] if getattr(mol, "filename", None) else ""

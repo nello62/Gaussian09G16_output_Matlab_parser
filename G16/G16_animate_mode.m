@@ -134,7 +134,12 @@ zlim_fixed = [min(extreme_pts(:,3))-pad, max(extreme_pts(:,3))+pad];
 % detection would otherwise re-evaluate connectivity on every frame).
 % -------------------------------------------------------------------------
 bondTable = G16_get_bond_length(mol, 'Tolerance', bond_tol, 'IncludeH', true);
-bond_list = [bondTable.Atom1, bondTable.Atom2];
+bond_order = zeros(height(bondTable), 1);
+for bb = 1:height(bondTable)
+    bond_order(bb) = local_classify_bond_order(char(bondTable.Sym1(bb)), ...
+        char(bondTable.Sym2(bb)), bondTable.Distance_Ang(bb));
+end
+bond_list = [bondTable.Atom1, bondTable.Atom2, bond_order];
 
 freq_str = sprintf('Mode %d - %.1f cm^{-1}', mode_idx, nm.freq(mode_idx));
 if isfield(mol, 'filename') && ~isempty(mol.filename)
@@ -202,3 +207,37 @@ fprintf('G16_animate_mode: animation saved to %s (%d frames, %.1f fps)\n', ...
     outfile, total_frames, fps);
 
 end % G16_animate_mode
+
+
+% =========================================================================
+function order = local_classify_bond_order(sym_i, sym_j, d)
+%LOCAL_CLASSIFY_BOND_ORDER  Same C-C/C-N/C-O bond-length classification as
+%   G16_draw_molecule's local classify_bond_order, duplicated here so the
+%   bond order can be fixed once from the equilibrium geometry (see above)
+%   instead of being re-evaluated from the oscillating instantaneous
+%   distance on every animation frame.
+    p = sort({upper(sym_i), upper(sym_j)});
+    pair = [p{1}, p{2}];
+    switch pair
+        case 'CC'
+            thresh = [1.27, 1.36];    % [triple/double, double/single]; the
+                                      % double/single boundary is set below
+                                      % the ~1.39-1.40 A aromatic C-C range,
+                                      % so symmetric aromatic rings render
+                                      % as all-single, not all-double.
+        case 'CN'
+            thresh = [1.22, 1.375];
+        case 'CO'
+            thresh = [1.165, 1.315];
+        otherwise
+            order = 1;
+            return
+    end
+    if d < thresh(1)
+        order = 3;
+    elseif d < thresh(2)
+        order = 2;
+    else
+        order = 1;
+    end
+end

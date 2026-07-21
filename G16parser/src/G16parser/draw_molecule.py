@@ -15,6 +15,72 @@ def _set_axes_equal(ax):
     ax.set_zlim3d([middle[2] - radius, middle[2] + radius])
 
 
+# Thresholds are [triple/double, double/single] boundaries in Angstrom,
+# normally the midpoint between adjacent reference bond lengths, EXCEPT
+# the C-C double/single boundary, which is set to 1.36 -- deliberately
+# below the ~1.39-1.40 A aromatic C-C range (verified on real ring
+# systems), so symmetric aromatic rings are drawn as all-single rather
+# than all-double: real aromatic bonds have no length alternation to
+# recover from geometry alone (bond order really is ~1.5 all around the
+# ring), so "all single" is the more honest rendering than "all double".
+_BOND_THRESHOLDS = {
+    "CC": (1.27, 1.36),
+    "CN": (1.22, 1.375),
+    "CO": (1.165, 1.315),
+}
+
+
+def _classify_bond_order(sym_i, sym_j, d):
+    """Estimates bond order (1/2/3) from bond length alone, for C-C, C-N,
+    and C-O pairs; any other element pair is always treated as a single
+    bond. Purely geometric, like the rest of this toolbox's bond-detection
+    logic -- not derived from an actual Gaussian bond-order analysis (e.g.
+    Wiberg/NBO indices).
+    """
+    pair = "".join(sorted((sym_i.upper(), sym_j.upper())))
+    thresh = _BOND_THRESHOLDS.get(pair)
+    if thresh is None:
+        return 1
+    if d < thresh[0]:
+        return 3
+    if d < thresh[1]:
+        return 2
+    return 1
+
+
+def _draw_bond_lines(ax, p1, p2, order, color):
+    """Draws ``order`` (1, 2, or 3) parallel line segments between p1 and
+    p2, offset perpendicular to the bond axis, in the classic
+    double-/triple-bond drawing convention.
+    """
+    p1 = np.asarray(p1, dtype=float)
+    p2 = np.asarray(p2, dtype=float)
+    u = p2 - p1
+    ulen = np.linalg.norm(u)
+    if ulen == 0:
+        return
+    u = u / ulen
+    ref = np.array([0.0, 0.0, 1.0])
+    if abs(np.dot(u, ref)) > 0.9:
+        ref = np.array([0.0, 1.0, 0.0])
+    v = np.cross(u, ref)
+    v = v / np.linalg.norm(v)
+
+    offset = 0.09  # Angstrom, spacing between parallel bond lines
+    if order == 2:
+        shifts = (-offset / 2, offset / 2)
+    elif order == 3:
+        shifts = (-offset, 0.0, offset)
+    else:
+        shifts = (0.0,)
+
+    for s in shifts:
+        dv = v * s
+        q1, q2 = p1 + dv, p2 + dv
+        ax.plot([q1[0], q2[0]], [q1[1], q2[1]], [q1[2], q2[2]],
+                color=color, linewidth=2.0)
+
+
 def _draw_cartesian_axes(ax, origin, axes_length):
     colors = [(0.85, 0.10, 0.10), (0.10, 0.65, 0.10), (0.10, 0.10, 0.85)]
     labels = ["X", "Y", "Z"]
@@ -37,12 +103,21 @@ def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
     instead when shown in an interactive backend).
 
     Parameters mirror G16_draw_molecule.m — see its docstring for details.
-    bond_list : array-like (Nbonds, 2) of 0-based atom-index pairs,
-        optional — draws exactly these bonds instead of auto-detecting
-        from bond_tol. Useful to keep a fixed bond topology across a
-        series of frames where atoms move (e.g. g16_animate_mode), so
-        bonds do not appear/disappear as instantaneous distances cross
-        the bond_tol threshold.
+    bond_list : array-like of (i, j) or (i, j, order) rows, 0-based atom
+        indices, optional — draws exactly these bonds instead of
+        auto-detecting from bond_tol. The optional 3rd column is a
+        pre-computed bond order (1/2/3); if omitted, order is classified
+        from the current distance. Useful to keep a fixed bond topology
+        (and, with the 3rd column, a fixed bond order) across a series of
+        frames where atoms move (e.g. g16_animate_mode), so bonds do not
+        appear/disappear or flicker between single/double/triple as
+        instantaneous distances change.
+
+    Bond order (single/double/triple) is estimated purely from bond
+    length for C-C, C-N, and C-O pairs (any other element pair is always
+    drawn as a single bond), and rendered as 1/2/3 parallel lines in the
+    usual chemical-drawing convention. This is a geometric estimate, not
+    Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices).
 
     Returns
     -------
@@ -72,6 +147,7 @@ def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
     # -----------------------------------------------------------------
     xyz = mol.xyz
     symbols = mol.symbols
+    bond_color = (0.5, 0.5, 0.5)
     if bond_list is None:
         for i in range(mol.Natoms):
             ri = get_radius(symbols[i])
@@ -79,14 +155,17 @@ def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
                 rj = get_radius(symbols[j])
                 d = np.linalg.norm(xyz[i] - xyz[j])
                 if d < (ri + rj) * bond_tol:
-                    p1, p2 = xyz[i], xyz[j]
-                    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
-                            color=(0.5, 0.5, 0.5), linewidth=2.0)
+                    order = _classify_bond_order(symbols[i], symbols[j], d)
+                    _draw_bond_lines(ax, xyz[i], xyz[j], order, bond_color)
     else:
-        for i, j in bond_list:
-            p1, p2 = xyz[i], xyz[j]
-            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
-                    color=(0.5, 0.5, 0.5), linewidth=2.0)
+        for row in bond_list:
+            i, j = int(row[0]), int(row[1])
+            if len(row) >= 3:
+                order = int(row[2])
+            else:
+                d = np.linalg.norm(xyz[i] - xyz[j])
+                order = _classify_bond_order(symbols[i], symbols[j], d)
+            _draw_bond_lines(ax, xyz[i], xyz[j], order, bond_color)
 
     # -----------------------------------------------------------------
     # Atoms (spheres), heavy elements first, H last (for the legend order)

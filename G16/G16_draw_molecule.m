@@ -24,13 +24,23 @@ function G16_draw_molecule(mol, varargin)
 %       'AxesLength'   - length of the X/Y/Z arrows, in Angstrom (default:
 %                        [] = auto, 20% of the plotted molecule's
 %                        bounding-box diagonal)
-%       'BondList'     - [Nbonds x 2] explicit atom-index pairs to draw as
-%                        bonds, bypassing the BondTol distance criterion
+%       'BondList'     - [Nbonds x 2] or [Nbonds x 3] explicit atom-index
+%                        pairs (optionally with a 3rd column giving a
+%                        pre-computed bond order 1/2/3) to draw as bonds,
+%                        bypassing the BondTol distance criterion
 %                        (default: [] = auto-detect from BondTol). Useful
-%                        to keep a fixed bond topology across a series of
+%                        to keep a fixed bond topology (and, with the 3rd
+%                        column, a fixed bond order) across a series of
 %                        frames where atoms move (e.g. G16_ANIMATE_MODE),
-%                        so bonds do not appear/disappear as instantaneous
-%                        distances cross the BondTol threshold.
+%                        so bonds do not appear/disappear or flicker
+%                        between single/double/triple as instantaneous
+%                        distances change.
+%
+%   Bond order (single/double/triple) is estimated purely from bond
+%   length for C-C, C-N, and C-O pairs (any other element pair is always
+%   drawn as a single bond), and rendered as 1/2/3 parallel lines in the
+%   usual chemical-drawing convention. This is a geometric estimate, not
+%   Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices).
 %
 %   Example:
 %       mol = G16_structure('zeatin.out');
@@ -142,6 +152,7 @@ camlight(ax, 45, 30);
 % -------------------------------------------------------------------------
 [th, ph] = meshgrid(linspace(0,2*pi,12), linspace(0,pi,8));  % low-resolution spheres for bonds
 
+bond_color = [0.50 0.50 0.50];
 if isempty(bond_list)
     for i = 1 : mol.Natoms
         ri = get_radius_local(mol.symbols{i}, cov_radii, default_radius);
@@ -149,11 +160,8 @@ if isempty(bond_list)
             rj = get_radius_local(mol.symbols{j}, cov_radii, default_radius);
             d  = norm(mol.xyz(i,:) - mol.xyz(j,:));
             if d < (ri + rj) * bond_tol
-                p1 = mol.xyz(i,:);
-                p2 = mol.xyz(j,:);
-                line(ax, [p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)], ...
-                     'Color', [0.50 0.50 0.50], 'LineWidth', 2.0, ...
-                     'HandleVisibility', 'off');
+                order = classify_bond_order(mol.symbols{i}, mol.symbols{j}, d);
+                draw_bond_lines(ax, mol.xyz(i,:), mol.xyz(j,:), order, bond_color);
             end
         end
     end
@@ -161,11 +169,14 @@ else
     for b = 1 : size(bond_list, 1)
         i = bond_list(b, 1);
         j = bond_list(b, 2);
-        p1 = mol.xyz(i,:);
-        p2 = mol.xyz(j,:);
-        line(ax, [p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)], ...
-             'Color', [0.50 0.50 0.50], 'LineWidth', 2.0, ...
-             'HandleVisibility', 'off');
+        if size(bond_list, 2) >= 3
+            order = bond_list(b, 3);   % pre-computed (e.g. by G16_animate_mode, to
+                                        % keep the order fixed across frames)
+        else
+            d = norm(mol.xyz(i,:) - mol.xyz(j,:));
+            order = classify_bond_order(mol.symbols{i}, mol.symbols{j}, d);
+        end
+        draw_bond_lines(ax, mol.xyz(i,:), mol.xyz(j,:), order, bond_color);
     end
 end
 
@@ -289,6 +300,83 @@ function r = get_radius_local(sym, cov_radii, default_radius)
         r = cov_radii(sym);
     else
         r = default_radius;
+    end
+end
+
+function order = classify_bond_order(sym_i, sym_j, d)
+%CLASSIFY_BOND_ORDER  Estimates bond order (1/2/3) from bond length alone,
+%   for C-C, C-N and C-O pairs; any other element pair is always treated
+%   as a single bond. Purely geometric, like the rest of this toolbox's
+%   bond-detection logic -- not derived from an actual Gaussian bond-order
+%   analysis (e.g. Wiberg/NBO indices).
+%
+%   Thresholds are the midpoint between adjacent reference bond lengths
+%   (triple/double/single, in Angstrom), EXCEPT the C-C double/single
+%   boundary, which is set to 1.36 -- deliberately below the ~1.39-1.40 A
+%   aromatic C-C range (verified on real ring systems), so symmetric
+%   aromatic rings are drawn as all-single rather than all-double: real
+%   aromatic bonds have no length alternation to recover from geometry
+%   alone (bond order really is ~1.5 all around the ring), so "all
+%   single" is the more honest rendering than "all double".
+    pair = sort_pair_local(upper(sym_i), upper(sym_j));
+    switch pair
+        case 'CC'
+            thresh = [1.27, 1.36];    % [triple/double, double/single]
+        case 'CN'
+            thresh = [1.22, 1.375];
+        case 'CO'
+            thresh = [1.165, 1.315];
+        otherwise
+            order = 1;
+            return
+    end
+    if d < thresh(1)
+        order = 3;
+    elseif d < thresh(2)
+        order = 2;
+    else
+        order = 1;
+    end
+end
+
+function key = sort_pair_local(a, b)
+%SORT_PAIR_LOCAL  Canonical (order-independent) 2-letter key for an
+%   element pair, e.g. ('N','C') and ('C','N') both give 'CN'.
+    p = sort({a, b});
+    key = [p{1}, p{2}];
+end
+
+function draw_bond_lines(ax, p1, p2, order, color)
+%DRAW_BOND_LINES  Draws ORDER (1, 2, or 3) parallel line segments between
+%   P1 and P2, offset perpendicular to the bond axis, in the classic
+%   double-/triple-bond drawing convention.
+    u = p2 - p1;
+    ulen = norm(u);
+    if ulen == 0
+        return
+    end
+    u = u / ulen;
+    ref = [0 0 1];
+    if abs(dot(u, ref)) > 0.9
+        ref = [0 1 0];
+    end
+    v = cross(u, ref);
+    v = v / norm(v);
+
+    offset = 0.09;   % Angstrom, spacing between parallel bond lines
+    switch order
+        case 2
+            shifts = [-1, 1] * (offset / 2);
+        case 3
+            shifts = [-1, 0, 1] * offset;
+        otherwise
+            shifts = 0;
+    end
+
+    for k = 1:numel(shifts)
+        dv = v * shifts(k);
+        line(ax, [p1(1) p2(1)] + dv(1), [p1(2) p2(2)] + dv(2), [p1(3) p2(3)] + dv(3), ...
+             'Color', color, 'LineWidth', 2.0, 'HandleVisibility', 'off');
     end
 end
 
