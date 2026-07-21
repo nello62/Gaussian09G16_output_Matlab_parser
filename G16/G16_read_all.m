@@ -46,6 +46,7 @@ function T = G16_read_all(filename)
     raw  = fread(fid, '*char')';
     fclose(fid);
     lines = strsplit(raw, newline);
+    G16_check_gaussian_match(lines, filename);
 
     % Mulliken and APT charge values
     T.charge = G16_charges(filename, 'plot', false, 'Lines', lines);

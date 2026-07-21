@@ -72,6 +72,7 @@ if isempty(lines)
     raw  = fread(fid, '*char')';
     fclose(fid);
     lines = strsplit(raw, newline);
+    G16_check_gaussian_match(lines, filename);
 end
 
 % -------------------------------------------------------------------------

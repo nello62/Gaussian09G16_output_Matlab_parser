@@ -21,4 +21,6 @@ fclose(fid);
 raw   = strrep(raw, sprintf('\r\n'), newline);
 raw   = strrep(raw, sprintf('\r'),   newline);
 lines = strsplit(raw, newline);
+
+G09_check_gaussian_match(lines, filename);
 end

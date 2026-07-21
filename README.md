@@ -13,6 +13,13 @@ Function names, signatures, and output struct fields are kept identical
 between the two (`G09_xxx` / `G16_xxx`), so switching between a G09 and a G16
 project only means changing which folder is on your MATLAB path.
 
+Because the two formats differ, every data-extraction function checks the
+file it reads against the Gaussian version it expects, and prints a
+non-blocking warning if they do not match (e.g. calling `G16_energy` on a
+Gaussian 09 file) — using the wrong toolbox can otherwise silently misparse
+the file (e.g. polarisability coming back as `NaN`) rather than raising an
+obvious error.
+
 ## Installation
 
 ```matlab
@@ -79,7 +86,7 @@ installed on your machine (returns a `table`, filterable by description).
 
 | Function | Description |
 |---|---|
-| `draw_molecule` | 3D CPK ball-and-stick render, with optional Cartesian axes indicator |
+| `draw_molecule` | 3D CPK ball-and-stick render, with optional Cartesian axes indicator; auto-detects double/triple bonds for C-C, C-N, C-O |
 | `draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `draw_orbital` | Orbital energy-level diagram, HOMO-LUMO transition arrow + gap |
 | `animate_mode` | Exports an MP4 animation of a vibrational mode (oscillating structure, GaussView-style) |
@@ -92,6 +99,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `list` | Lists every function in the toolbox with its one-line description |
 | `write_report` | Writes a formatted text report (.txt) from a `read_all` struct |
 | `read_lines` *(G09 only)* | Shared file-reading helper used internally |
+| `check_gaussian_match` | Internal: warns if a file looks like the other Gaussian version (called automatically by every reading function) |
 
 All Name-Value options, output struct fields, and examples are documented in
 each function's own help text (`help G16_charges`, etc.).

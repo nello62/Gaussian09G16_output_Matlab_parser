@@ -68,7 +68,7 @@ python3 example.py path/to/molecule.out
 | `g16_tddft` | TD-DFT excited states |
 | `g16_read_all` | Runs the full extraction set in one call, reading the file only once |
 | `g16_write_report` | Writes a formatted text report (.txt) from a `g16_read_all` Struct |
-| `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D) |
+| `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D); auto-detects double/triple bonds for C-C, C-N, C-O |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `g16_draw_orbital` | Orbital energy-level diagram with HOMO-LUMO gap arrow |
 | `g16_animate_mode` | Exports an MP4 animation of a vibrational mode (requires `ffmpeg`) |
@@ -127,3 +127,14 @@ python3 example.py path/to/molecule.out
   being re-detected from instantaneous distances every frame — otherwise
   bonds flicker in and out as atoms oscillate past the `bond_tol`
   threshold.
+- **Bond order (single/double/triple):** `g16_draw_molecule` estimates
+  bond order purely from bond length for C-C, C-N, and C-O pairs (any
+  other element pair is always drawn as a single bond), rendered as
+  1/2/3 parallel lines — a geometric estimate, not Gaussian's own
+  bond-order analysis (e.g. Wiberg/NBO indices). The `bond_list`
+  parameter accepts an optional 3rd column with a pre-computed order,
+  used by `g16_animate_mode` to keep both bond topology and order fixed
+  across all frames. The C-C double/single threshold is set to 1.36 Å
+  rather than the generic reference-length midpoint, so symmetric
+  aromatic rings (C-C ≈1.39-1.40 Å, no real length alternation) render
+  as all-single instead of all-double.
