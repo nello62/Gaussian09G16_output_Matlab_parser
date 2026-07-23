@@ -9,6 +9,9 @@ def test_hyperpolar_does_not_crash(sample_out):
     # data may or may not be present in a given sample file; either way it
     # must not raise, and beta_vec must be a float (possibly NaN)
     assert isinstance(hp.beta0.beta_vec, float)
+    if hp.beta0.tensor is not None:  # sample file has real Beta(0;0,0) data
+        assert not math.isnan(hp.beta0.beta_vec)
+        assert hp.beta0.beta_vec >= 0
 
 
 def test_tddft_absent_or_valid(sample_out):
