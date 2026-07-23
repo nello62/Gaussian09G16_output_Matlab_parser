@@ -68,6 +68,11 @@ Most tests need one real Gaussian 16 `.out`/`.log` file in
 [`tests/fixtures/README.md`](tests/fixtures/README.md)); without one they
 skip cleanly rather than failing.
 
+This suite also runs automatically on every push/PR to `main` via GitHub
+Actions ([`.github/workflows/python-tests.yml`](../.github/workflows/python-tests.yml),
+on Python 3.9 and 3.12) — see the badge at the top of the repository's
+main [README](../README.md).
+
 ## Function reference
 
 | Function | Description |

@@ -1,6 +1,7 @@
 # Gaussian09G16_output_Matlab_parser
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21302268.svg)](https://doi.org/10.5281/zenodo.21302268)
+[![G16parser tests](https://github.com/nello62/Gaussian09G16_output_Matlab_parser/actions/workflows/python-tests.yml/badge.svg)](https://github.com/nello62/Gaussian09G16_output_Matlab_parser/actions/workflows/python-tests.yml)
 
 MATLAB toolbox for parsing and visualising **Gaussian 09** and **Gaussian 16**
 output files (`.out` / `.log` / `.fchk`) — molecular structure, energies,

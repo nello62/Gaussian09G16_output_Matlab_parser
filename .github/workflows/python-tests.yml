@@ -1,0 +1,37 @@
+name: G16parser tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "G16parser/**"
+      - ".github/workflows/python-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "G16parser/**"
+      - ".github/workflows/python-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install G16parser (with test dependencies)
+        working-directory: G16parser
+        run: pip install -e ".[test]"
+
+      - name: Run pytest
+        working-directory: G16parser
+        run: pytest -v
