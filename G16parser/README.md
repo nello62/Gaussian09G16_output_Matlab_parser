@@ -55,6 +55,19 @@ See [`example.py`](example.py) for a short, runnable end-to-end example:
 python3 example.py path/to/molecule.out
 ```
 
+## Running tests
+
+```bash
+cd G16parser
+pip install -e ".[test]"
+pytest
+```
+
+Most tests need one real Gaussian 16 `.out`/`.log` file in
+`tests/fixtures/` to run against (see
+[`tests/fixtures/README.md`](tests/fixtures/README.md)); without one they
+skip cleanly rather than failing.
+
 ## Function reference
 
 | Function | Description |

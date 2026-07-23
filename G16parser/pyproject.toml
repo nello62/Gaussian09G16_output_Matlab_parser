@@ -13,5 +13,14 @@ dependencies = [
     "matplotlib",
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:matplotlib.pyplot was imported before G16parser:UserWarning",
+]
