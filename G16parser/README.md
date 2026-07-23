@@ -40,6 +40,10 @@ g16.g16_draw_orbital(oe)
 
 T = g16.g16_read_all('molecule.out')   # everything in one call, single file read
 g16.g16_write_report(T)                # -> molecule_report.txt
+
+g16.g16_restart('molecule.out')        # -> molecule_restarted.gjf
+
+summary = g16.g16_batch_read_all('results/', write_reports=True)  # one row per file
 ```
 
 Every function returns a `Struct` (attribute access, e.g. `mol.xyz`,
@@ -71,6 +75,8 @@ python3 example.py path/to/molecule.out
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
 | `g16_read_all` | Runs the full extraction set in one call, reading the file only once |
+| `g16_restart` | Generates a `.gjf` restart input file from an existing output file |
+| `g16_batch_read_all` | Runs `g16_read_all` (+ `g16_orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal |
 | `g16_write_report` | Writes a formatted text report (.txt) from a `g16_read_all` Struct |
 | `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D); auto-detects double/triple bonds for C-C, C-N, C-O |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |

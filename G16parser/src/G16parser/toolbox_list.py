@@ -1,4 +1,5 @@
 from .animate_mode import g16_animate_mode
+from .batch_read_all import g16_batch_read_all
 from .charge_mult import g16_charge_mult
 from .charges import g16_charges
 from .convergence import g16_convergence
@@ -15,6 +16,7 @@ from .nmodes import g16_nmodes
 from .orbital_energies import g16_orbital_energies
 from .read_all import g16_read_all
 from .read_input import g16_read_input
+from .restart import g16_restart
 from .route import g16_route
 from .spectra import g16_spectra
 from .structure import g16_structure
@@ -25,7 +27,7 @@ _FUNCTIONS = [
     g16_gaussian_version, g16_charge_mult, g16_route, g16_structure, g16_read_input, g16_energy,
     g16_convergence, g16_dipole_polar, g16_charges, g16_nmodes, g16_spectra,
     g16_orbital_energies, g16_get_bond_length, g16_hyperpolar, g16_tddft,
-    g16_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
+    g16_read_all, g16_restart, g16_batch_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
     g16_animate_mode, g16_mode_viewer, g16_write_report,
 ]
 

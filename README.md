@@ -77,9 +77,10 @@ installed on your machine (returns a `table`, filterable by description).
 | `get_bond_length` | Bond-length table from covalent radii |
 | `gaussian_version` | Detects the Gaussian version/revision that produced the file (works on `.fchk` via a sibling `.log`/`.out`) |
 | `read_all` | Runs the full extraction set in one call, reading the file only once |
+| `batch_read_all` | Runs `read_all` (+ `orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary table; per-file failures are recorded, not fatal |
 | `fchk_read` *(G09 only)* | Reads a Gaussian formatted checkpoint (`.fchk`) file |
 | `charges_fchk` *(G09 only)* | Visualises charges from a `fchk_read` struct |
-| `restart` *(G09 only)* | Generates a `.gjf` restart input file |
+| `restart` | Generates a `.gjf` restart input file from an existing output file |
 | `hyperpolar` *(G16 only)* | Dipole hyperpolarisability (Beta) |
 | `tddft` *(G16 only)* | TD-DFT excited states |
 

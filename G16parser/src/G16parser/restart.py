@@ -1,0 +1,170 @@
+import os
+import re
+
+from ._common import read_lines
+from .structure import g16_structure
+
+_LINK0_CHK_RE = re.compile(r"^%chk=", re.IGNORECASE)
+_LINK0_NPROCSHARED_RE = re.compile(r"^%nprocshared=", re.IGNORECASE)
+_LINK0_NPROC_RE = re.compile(r"^%nproc=", re.IGNORECASE)
+_LINK0_MEM_RE = re.compile(r"^%mem=", re.IGNORECASE)
+_SEPARATOR_RE = re.compile(r"^-{10,}$")
+_CHARGE_MULT_RE = re.compile(r"Charge\s*=\s*([-\d]+)\s+Multiplicity\s*=\s*(\d+)")
+
+
+def _wrap_route(route_str, max_len=72):
+    tokens = route_str.split()
+    wrapped = []
+    current = ""
+    for tok in tokens:
+        if not current:
+            current = tok
+        elif len(current) + 1 + len(tok) <= max_len:
+            current = current + " " + tok
+        else:
+            wrapped.append(current)
+            current = tok
+    if current:
+        wrapped.append(current)
+    if not wrapped:
+        wrapped = [route_str]
+    return wrapped
+
+
+def g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem=""):
+    """Generates a Gaussian 09/16 input file (.gjf) for restarting a
+    calculation from a geometry in an existing Gaussian 16 .log/.out file.
+
+    Port of G16_restart.m.
+
+    Parameters
+    ----------
+    filename : str
+    step : 'last' (default) | 'first' | int
+    output : str, optional — output .gjf path (default: <base>_restarted.gjf)
+    extra_route : str, optional — additional keywords appended to the route
+    nproc : int, optional — %nprocshared override (0 = keep/omit)
+    mem : str, optional — %mem override ('' = keep/omit)
+
+    Returns
+    -------
+    gjf_file : str — path of the generated .gjf file
+
+    Note: if the source file has no %chk line, the checkpoint name is
+    derived from the source filename instead.
+    """
+    lines = read_lines(filename)
+    n = len(lines)
+    extra_route = extra_route.strip()
+
+    # ── Link 0 ──────────────────────────────────────────────────────────
+    chk_path = mem_str = nproc_str = ""
+    for ln in lines[: min(n, 200)]:
+        ls = ln.strip()
+        if _LINK0_CHK_RE.match(ls):
+            chk_path = ls[5:].strip()
+        elif _LINK0_NPROCSHARED_RE.match(ls):
+            nproc_str = ls[13:].strip()
+        elif _LINK0_NPROC_RE.match(ls):
+            nproc_str = ls[7:].strip()
+        elif _LINK0_MEM_RE.match(ls):
+            mem_str = ls[5:].strip()
+
+    if nproc:
+        nproc_str = str(nproc)
+    if mem:
+        mem_str = mem
+
+    # ── Checkpoint path ───────────────────────────────────────────────────
+    src_dir, src_name = os.path.split(filename)
+    src_base, _ = os.path.splitext(src_name)
+    src_base_clean = re.sub(r"_restarted$", "", src_base)
+
+    if chk_path:
+        chk_dir, chk_name = os.path.split(chk_path)
+        chk_base, _ = os.path.splitext(chk_name)
+        chk_base = re.sub(r"_restarted$", "", chk_base)
+        new_chk = f"{chk_base}_restarted.chk" if not chk_dir else f"{chk_dir}/{chk_base}_restarted.chk"
+    else:
+        new_chk = f"{src_base_clean}_restarted.chk"
+
+    # ── Route section ─────────────────────────────────────────────────────
+    sep_idx = [i for i, ln in enumerate(lines) if _SEPARATOR_RE.match(ln.strip())]
+
+    route_sep_start = None
+    for k in sep_idx:
+        for j in range(k + 1, min(k + 4, n)):
+            if lines[j].strip().startswith("#"):
+                route_sep_start = k
+                break
+        if route_sep_start is not None:
+            break
+
+    route_sep_end = None
+    if route_sep_start is not None:
+        for k in sep_idx:
+            if k > route_sep_start:
+                route_sep_end = k
+                break
+
+    if route_sep_start is None or route_sep_end is None:
+        raise ValueError(f"g16_restart: route section not found in {filename}")
+
+    route_lines = [lines[k].strip() for k in range(route_sep_start + 1, route_sep_end) if lines[k].strip()]
+    route_str = " ".join(route_lines).strip()
+    if extra_route:
+        route_str = f"{route_str} {extra_route}"
+
+    # ── Charge / multiplicity ────────────────────────────────────────────
+    charge, mult = 0, 1
+    for ln in lines:
+        m = _CHARGE_MULT_RE.search(ln)
+        if m:
+            charge, mult = int(m.group(1)), int(m.group(2))
+            break
+
+    # ── Geometry ──────────────────────────────────────────────────────────
+    mol = g16_structure(filename, step=step, lines=lines)
+
+    # ── Output file ───────────────────────────────────────────────────────
+    if not output:
+        output = f"{src_base_clean}_restarted.gjf" if not src_dir else f"{src_dir}/{src_base_clean}_restarted.gjf"
+
+    step_label = step if isinstance(step, str) else f"step {step}"
+    title_line = f"{src_base_clean}_restarted from {filename} ({step_label} geometry)"
+
+    # ── Write ─────────────────────────────────────────────────────────────
+    with open(output, "w") as f:
+        f.write(f"! Restarted from: {filename}\n")
+        f.write("! Generated by g16_restart (G16parser Python toolbox)\n")
+        f.write("!\n")
+
+        if new_chk:
+            f.write(f"%chk={new_chk}\n")
+        if nproc_str:
+            f.write(f"%nprocshared={nproc_str}\n")
+        if mem_str:
+            f.write(f"%mem={mem_str}\n")
+
+        wrapped = _wrap_route(route_str, 72)
+        f.write("-" * 70 + "\n")
+        for w in wrapped:
+            f.write(f" {w}\n")
+        f.write("-" * 70 + "\n")
+
+        f.write(f"\n{title_line}\n\n")
+        f.write(f"{charge} {mult}\n")
+
+        for sym, (x, y, z) in zip(mol.symbols, mol.xyz):
+            f.write(f"{sym:<4s}   {x:14.8f}  {y:14.8f}  {z:14.8f}\n")
+        f.write("\n")
+
+    print("\n── g16_restart ──")
+    print(f"  Source file    : {filename}")
+    print(f"  Geometry step  : {step}  ({mol.n_steps} blocks total)")
+    print(f"  Atoms          : {mol.Natoms}")
+    print(f"  Charge / Mult  : {charge} / {mult}")
+    print(f"  Checkpoint     : {new_chk}")
+    print(f"  Output .gjf    : {output}\n")
+
+    return output
