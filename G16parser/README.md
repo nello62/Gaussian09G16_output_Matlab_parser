@@ -30,6 +30,9 @@ import G16parser as g16
 mol = g16.g16_structure('molecule.out')
 g16.g16_draw_molecule(mol, show_axes=True)
 
+ginp = g16.g16_read_input('molecule.gjf')   # also .com / .in
+g16.g16_draw_molecule(ginp, show_axes=True)  # reuses the same struct shape
+
 ch = g16.g16_charges('molecule.out', show_dipole=True)
 
 oe = g16.g16_orbital_energies('molecule.out')
@@ -52,6 +55,7 @@ python3 example.py path/to/molecule.out
 
 | Function | Description |
 |---|---|
+| `g16_read_input` | Reads a Gaussian **input** file (`.gjf`/`.com`/`.in`): link0 commands, route, title, charge/multiplicity, and starting geometry — output `Struct` is compatible with `g16_draw_molecule`/`g16_get_bond_length` |
 | `g16_structure` | Molecular geometry (symbols, xyz as np.ndarray, atom count) |
 | `g16_energy` | SCF energy and thermochemistry |
 | `g16_convergence` | Geometry-optimisation convergence criteria per step (`plot=True` for a matplotlib figure) |

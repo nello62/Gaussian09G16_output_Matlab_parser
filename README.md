@@ -63,6 +63,7 @@ installed on your machine (returns a `table`, filterable by description).
 
 | Function | Description |
 |---|---|
+| `G_read_input` *(shared, no G09_/G16_ prefix)* | Reads a Gaussian **input** file (`.gjf`/`.com`/`.in`): link0 commands, route, title, charge/multiplicity, and starting geometry — output struct is compatible with `draw_molecule`/`get_bond_length` |
 | `structure` | Molecular geometry (symbols, xyz, atom count) |
 | `energy` | SCF energy and thermochemistry (ZPE, H, G, S, ...) |
 | `charges` | Mulliken/APT atomic charges, optional dipole moment overlay |
