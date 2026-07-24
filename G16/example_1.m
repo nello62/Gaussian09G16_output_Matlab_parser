@@ -10,8 +10,8 @@
 %              doi: 10.1039/d6cp01164k
 %
 %   Requirements: G16/ on the MATLAB path, test_2.out in the current
-%   folder. Running this script creates test_2_mode_91.pdf in the
-%   current folder.
+%   folder. Running this script creates three PDFs in the current
+%   folder: test_2_mol.pdf, test_2_mode_91.pdf, test_2_charges.pdf.
 
 clear
 close all
@@ -34,10 +34,9 @@ set(ax1, 'Visible', 'off');
 G16_draw_molecule(mol, 'Title', 'Violacein', 'Ax', ax1);
 set(ax1, 'View', [view_az, view_el]);
 
-% Uncomment to export (ContentType 'vector' gives a crisp publication
-% figure but is slow for a molecule this size; use 'image' for a quick
-% low-effort preview instead).
-% exportgraphics(ax1, 'test_2_mol.pdf', 'ContentType', 'vector');
+% ContentType 'vector' gives a crisp publication figure but is slow for
+% a molecule this size; use 'image' instead for a quick low-effort preview.
+exportgraphics(ax1, 'test_2_mol.pdf', 'ContentType', 'vector');
 
 %% 2) Vibrational mode — mode #91 is the main C=C stretch
 nm = G16_nmodes(filename);
@@ -64,5 +63,7 @@ t = get(gca, 'Title');
 t.String = {'Violacein - Mulliken Charges (atom)'};
 set(gca, 'Title', t);
 
+exportgraphics(gca, 'test_2_charges.pdf', 'ContentType', 'vector');
+
 fprintf('\nDone. Figures: structure, mode 91, Mulliken charges.\n');
-fprintf('Saved: test_2_mode_91.pdf\n');
+fprintf('Saved: test_2_mol.pdf, test_2_mode_91.pdf, test_2_charges.pdf\n');
