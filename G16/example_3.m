@@ -4,6 +4,7 @@
 %   on a real DFT calculation, then combines their results into a
 %   one-line summary — a small taste of what G16_read_all/
 %   G16_write_report do at full scale across every extraction function.
+%   Also renders the HOMO-LUMO diagram via G16_draw_orbital.
 %
 %   Data file: test_2.out — DFT geometry optimisation of Violacein.
 %   Reference: G. Cassone et al., Phys. Chem. Chem. Phys.,
@@ -12,23 +13,24 @@
 %   Requirements: G16/ on the MATLAB path, test_2.out in the current
 %   folder. Each function already prints its own formatted summary to
 %   the command window (shown below as a reference for what to expect
-%   on this file); this script does not repeat those printouts.
+%   on this file); this script does not repeat those printouts. Running
+%   it creates test_2_orbital_diagram.pdf in the current folder.
 
 clear; close all; clc
 filename = 'test_2.out';
-
 %% 1) HOMO-LUMO gap — detailed data in the oe structure
 oe = G16_orbital_energies(filename);
-
 % Console output for this file:
 %   ── G16_orbital_energies (step 3/3): test_2.out ──
 %     HOMO = -0.190210 Ha  (-5.1759 eV)
 %     LUMO = -0.096890 Ha  (-2.6365 eV)
 %     Gap  =  0.093320 Ha  ( 2.5394 eV)
 
+% Orbital energy-level diagram (title defaults to the source filename)
+G16_draw_orbital(oe);
+exportgraphics(gcf, 'test_2_orbital_diagram.pdf', 'ContentType', 'vector');
 %% 2) Energy and thermochemistry — detailed data in the en structure
 en = G16_energy(filename);
-
 % Console output for this file:
 %   ── G16_energy: test_2.out ──
 %     Method : RB3LYP
@@ -42,7 +44,6 @@ en = G16_energy(filename);
 
 %% 3) Geometry-optimisation convergence — detailed data in the cv structure
 cv = G16_convergence(filename);
-
 % Console output for this file:
 %   G16_convergence: test_2.out
 %     Steps read  : 11
@@ -56,7 +57,6 @@ if cv.converged
 else
     conv_label = sprintf('NO (%d steps read)', cv.Nsteps);
 end
-
 fprintf('\nSummary for %s:\n', filename);
 fprintf('  HOMO-LUMO gap : %.3f eV\n', oe.gap_eV);
 if en.has_thermo
