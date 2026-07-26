@@ -89,7 +89,7 @@ installed on your machine (returns a `table`, filterable by description).
 
 | Function | Description |
 |---|---|
-| `draw_molecule` | 3D CPK ball-and-stick render, with optional Cartesian axes indicator; auto-detects double/triple bonds for C-C, C-N, C-O |
+| `draw_molecule` | 3D CPK ball-and-stick render, with optional Cartesian axes indicator; auto-detects double/triple bonds for C-C and C-O (C-N is always drawn single) |
 | `draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `draw_orbital` | Orbital energy-level diagram, HOMO-LUMO transition arrow + gap |
 | `animate_mode` | Exports an MP4 animation of a vibrational mode (oscillating structure, GaussView-style) |

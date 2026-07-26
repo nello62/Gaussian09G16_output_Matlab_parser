@@ -96,7 +96,7 @@ main [README](../README.md).
 | `g16_restart` | Generates a `.gjf` restart input file from an existing output file |
 | `g16_batch_read_all` | Runs `g16_read_all` (+ `g16_orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal |
 | `g16_write_report` | Writes a formatted text report (.txt) from a `g16_read_all` Struct |
-| `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D); auto-detects double/triple bonds for C-C, C-N, C-O |
+| `g16_draw_molecule` | 3D CPK ball-and-stick render (matplotlib 3D); auto-detects double/triple bonds for C-C and C-O (C-N is always drawn single) |
 | `g16_draw_mode` | 3D structure with a vibrational mode's displacement arrows |
 | `g16_draw_orbital` | Orbital energy-level diagram with HOMO-LUMO gap arrow |
 | `g16_animate_mode` | Exports an MP4 animation of a vibrational mode (requires `ffmpeg`) |
@@ -156,10 +156,15 @@ main [README](../README.md).
   bonds flicker in and out as atoms oscillate past the `bond_tol`
   threshold.
 - **Bond order (single/double/triple):** `g16_draw_molecule` estimates
-  bond order purely from bond length for C-C, C-N, and C-O pairs (any
-  other element pair is always drawn as a single bond), rendered as
-  1/2/3 parallel lines — a geometric estimate, not Gaussian's own
-  bond-order analysis (e.g. Wiberg/NBO indices). The `bond_list`
+  bond order purely from bond length for C-C and C-O pairs (any other
+  element pair, including C-N, is always drawn as a single bond),
+  rendered as 1/2/3 parallel lines — a geometric estimate, not
+  Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices). C-N is
+  deliberately excluded: a single length threshold cannot separate
+  aromatic C-N (e.g. pyridine, ~1.34 Å) from a genuine C=N, and using
+  one produced one ring C-N bond drawn double and its
+  chemically-equivalent neighbour drawn single on asymmetric
+  pyridine-like rings. The `bond_list`
   parameter accepts an optional 3rd column with a pre-computed order,
   used by `g16_animate_mode` to keep both bond topology and order fixed
   across all frames. The C-C double/single threshold is set to 1.36 Å

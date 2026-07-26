@@ -211,11 +211,15 @@ end % G16_animate_mode
 
 % =========================================================================
 function order = local_classify_bond_order(sym_i, sym_j, d)
-%LOCAL_CLASSIFY_BOND_ORDER  Same C-C/C-N/C-O bond-length classification as
+%LOCAL_CLASSIFY_BOND_ORDER  Same C-C/C-O bond-length classification as
 %   G16_draw_molecule's local classify_bond_order, duplicated here so the
 %   bond order can be fixed once from the equilibrium geometry (see above)
 %   instead of being re-evaluated from the oscillating instantaneous
-%   distance on every animation frame.
+%   distance on every animation frame. C-N is deliberately not classified
+%   by length (always single) -- a single threshold cannot separate
+%   aromatic C-N, e.g. pyridine rings, from a genuine C=N, and doing so
+%   produced one ring C-N bond drawn double and its chemically-equivalent
+%   neighbour drawn single.
     p = sort({upper(sym_i), upper(sym_j)});
     pair = [p{1}, p{2}];
     switch pair
@@ -225,8 +229,6 @@ function order = local_classify_bond_order(sym_i, sym_j, d)
                                       % the ~1.39-1.40 A aromatic C-C range,
                                       % so symmetric aromatic rings render
                                       % as all-single, not all-double.
-        case 'CN'
-            thresh = [1.22, 1.375];
         case 'CO'
             thresh = [1.165, 1.315];
         otherwise

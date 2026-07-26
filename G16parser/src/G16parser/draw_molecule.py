@@ -23,19 +23,24 @@ def _set_axes_equal(ax):
 # than all-double: real aromatic bonds have no length alternation to
 # recover from geometry alone (bond order really is ~1.5 all around the
 # ring), so "all single" is the more honest rendering than "all double".
+#
+# C-N is deliberately absent: a single length threshold cannot separate
+# aromatic C-N (e.g. pyridine rings, ~1.34 A) from a genuine C=N, and
+# using one produced one ring C-N bond drawn double and its
+# chemically-equivalent neighbour drawn single on asymmetric
+# pyridine-like rings -- worse than always drawing C-N as a single bond.
 _BOND_THRESHOLDS = {
     "CC": (1.27, 1.36),
-    "CN": (1.22, 1.375),
     "CO": (1.165, 1.315),
 }
 
 
 def _classify_bond_order(sym_i, sym_j, d):
-    """Estimates bond order (1/2/3) from bond length alone, for C-C, C-N,
-    and C-O pairs; any other element pair is always treated as a single
-    bond. Purely geometric, like the rest of this toolbox's bond-detection
-    logic -- not derived from an actual Gaussian bond-order analysis (e.g.
-    Wiberg/NBO indices).
+    """Estimates bond order (1/2/3) from bond length alone, for C-C and
+    C-O pairs; any other element pair (including C-N) is always treated
+    as a single bond. Purely geometric, like the rest of this toolbox's
+    bond-detection logic -- not derived from an actual Gaussian bond-order
+    analysis (e.g. Wiberg/NBO indices).
     """
     pair = "".join(sorted((sym_i.upper(), sym_j.upper())))
     thresh = _BOND_THRESHOLDS.get(pair)
@@ -114,10 +119,11 @@ def g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
         instantaneous distances change.
 
     Bond order (single/double/triple) is estimated purely from bond
-    length for C-C, C-N, and C-O pairs (any other element pair is always
-    drawn as a single bond), and rendered as 1/2/3 parallel lines in the
-    usual chemical-drawing convention. This is a geometric estimate, not
-    Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices).
+    length for C-C and C-O pairs (any other element pair, including C-N,
+    is always drawn as a single bond), and rendered as 1/2/3 parallel
+    lines in the usual chemical-drawing convention. This is a geometric
+    estimate, not Gaussian's own bond-order analysis (e.g. Wiberg/NBO
+    indices).
 
     Returns
     -------

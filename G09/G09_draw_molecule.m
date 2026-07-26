@@ -37,10 +37,15 @@ function G09_draw_molecule(mol, varargin)
 %                        distances change.
 %
 %   Bond order (single/double/triple) is estimated purely from bond
-%   length for C-C, C-N, and C-O pairs (any other element pair is always
-%   drawn as a single bond), and rendered as 1/2/3 parallel lines in the
-%   usual chemical-drawing convention. This is a geometric estimate, not
-%   Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices).
+%   length for C-C and C-O pairs (any other element pair, including C-N,
+%   is always drawn as a single bond), and rendered as 1/2/3 parallel
+%   lines in the usual chemical-drawing convention. This is a geometric
+%   estimate, not Gaussian's own bond-order analysis (e.g. Wiberg/NBO
+%   indices). C-N was dropped from length-based classification: a single
+%   length threshold cannot distinguish aromatic C-N (e.g. pyridine
+%   rings) from a genuine C=N, and misclassifying it produced
+%   inconsistent single/double rendering across chemically-equivalent
+%   ring bonds.
 %
 %   Example:
 %       mol = G09_structure('zeatin.out');
@@ -305,10 +310,10 @@ end
 
 function order = classify_bond_order(sym_i, sym_j, d)
 %CLASSIFY_BOND_ORDER  Estimates bond order (1/2/3) from bond length alone,
-%   for C-C, C-N and C-O pairs; any other element pair is always treated
-%   as a single bond. Purely geometric, like the rest of this toolbox's
-%   bond-detection logic -- not derived from an actual Gaussian bond-order
-%   analysis (e.g. Wiberg/NBO indices).
+%   for C-C and C-O pairs; any other element pair (including C-N) is
+%   always treated as a single bond. Purely geometric, like the rest of
+%   this toolbox's bond-detection logic -- not derived from an actual
+%   Gaussian bond-order analysis (e.g. Wiberg/NBO indices).
 %
 %   Thresholds are the midpoint between adjacent reference bond lengths
 %   (triple/double/single, in Angstrom), EXCEPT the C-C double/single
@@ -318,12 +323,16 @@ function order = classify_bond_order(sym_i, sym_j, d)
 %   aromatic bonds have no length alternation to recover from geometry
 %   alone (bond order really is ~1.5 all around the ring), so "all
 %   single" is the more honest rendering than "all double".
+%
+%   C-N is deliberately NOT classified by length: a single threshold
+%   cannot separate aromatic C-N (e.g. pyridine, ~1.34 A) from a real
+%   C=N, and on asymmetric pyridine-like rings this produced one C-N
+%   bond drawn double and its chemically-equivalent neighbour drawn
+%   single -- worse than always drawing C-N as a single line.
     pair = sort_pair_local(upper(sym_i), upper(sym_j));
     switch pair
         case 'CC'
             thresh = [1.27, 1.36];    % [triple/double, double/single]
-        case 'CN'
-            thresh = [1.22, 1.375];
         case 'CO'
             thresh = [1.165, 1.315];
         otherwise
