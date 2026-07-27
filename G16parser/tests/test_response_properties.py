@@ -12,6 +12,13 @@ def test_hyperpolar_does_not_crash(sample_out):
     if hp.beta0.tensor is not None:  # sample file has real Beta(0;0,0) data
         assert not math.isnan(hp.beta0.beta_vec)
         assert hp.beta0.beta_vec >= 0
+        # par_z ("|| (z)", with a space in Gaussian's own label -- unlike
+        # every other label here) previously stayed NaN unconditionally:
+        # the label-matching regex silently failed on the embedded space
+        # and the line was skipped. perp_z ("_|_(z)", no space) always
+        # parsed fine, so this asymmetry is exactly what to watch for.
+        assert not math.isnan(hp.beta0.par_z)
+        assert not math.isnan(hp.beta0.perp_z)
 
 
 def test_tddft_absent_or_valid(sample_out):

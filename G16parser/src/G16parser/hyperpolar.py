@@ -27,6 +27,13 @@ def _parse_beta_block(lines, k_start, n):
             break
         if re.match(r"^\s*-{10,}", ln):
             break
+        # Gaussian prints the parallel-z label as "|| (z)" WITH a space,
+        # unlike every other label here ("_|_(z)", "xxx", "x", ...), which
+        # breaks the single-token (\S+) label match below (the line fails
+        # to match at all and is silently skipped, leaving par_z
+        # permanently NaN). Normalise it to the space-free form handled
+        # below.
+        ln = ln.replace("|| (z)", "||(z)")
         m = _LABEL_RE.match(ln)
         if not m:
             continue

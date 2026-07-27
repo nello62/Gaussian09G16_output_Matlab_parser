@@ -175,6 +175,13 @@ for k = k_start : min(k_start+25, N)
     if ~isempty(regexp(ln, '^\s*$', 'once')), break; end
     if ~isempty(regexp(ln, '^\s*-{10,}', 'once')), break; end
 
+    % Gaussian prints the parallel-z label as "|| (z)" WITH a space, unlike
+    % every other label here ("_|_(z)", "xxx", "x", ...), which breaks the
+    % single-token (\S+) label match below (the line fails to match at all
+    % and is silently skipped, leaving par_z permanently NaN). Normalise it
+    % to the space-free form the switch-case below already expects.
+    ln = strrep(ln, '|| (z)', '||(z)');
+
     % Formato:  "   label   value_au   value_esu   value_SI"
     % The au value is the first number after the label
     tok = regexp(ln, '^\s*(\S+)\s+([-\d.Dd+E]+)', 'tokens', 'once');
