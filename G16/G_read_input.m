@@ -118,11 +118,21 @@ if ~isempty(first_trimmed) && first_trimmed(1) == '#'
             i = i + 1;
             break
         end
-        route_lines{end+1} = tln; %#ok<AGROW>
+        % Strip only the leading indent whitespace; keep any trailing
+        % whitespace exactly as printed (see join comment below).
+        route_lines{end+1} = regexprep(lines{i}, '^\s+', ''); %#ok<AGROW>
         i = i + 1;
     end
 end
-route = strtrim(strjoin(route_lines, ' '));
+% If a route keyword happens to be wrapped mid-word across two lines,
+% joining with an inserted space (the previous behaviour) would corrupt
+% it (e.g. "nosym" / "m ..." for "nosymm ..."). Concatenating with no
+% separator instead reconstructs the original text correctly whether the
+% wrap fell mid-word or between two words (any real separating space is
+% part of the line content itself, not the join). A final
+% whitespace-collapse tidies up the rare double space this can
+% otherwise leave.
+route = regexprep(strtrim(strjoin(route_lines, '')), '\s+', ' ');
 
 method = ''; basis = '';
 rtoks = strsplit(route);

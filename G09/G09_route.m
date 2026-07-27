@@ -51,10 +51,25 @@ end
 route_lines = {};
 for k = route_sep_start+1 : route_sep_end-1
     ln = strtrim(lines{k});
-    if ~isempty(ln), route_lines{end+1} = ln; end %#ok<AGROW>
+    if ~isempty(ln)
+        % Strip only the leading indent space; keep any trailing
+        % whitespace exactly as printed (see join comment below).
+        route_lines{end+1} = regexprep(lines{k}, '^\s+', ''); %#ok<AGROW>
+    end
 end
 
-route = strtrim(strjoin(route_lines, ' '));
+% Gaussian wraps the route echo at a fixed column with no regard for word
+% boundaries, so a keyword can be split mid-word across two lines (e.g.
+% "nosym" / "m geom=..." for "nosymm geom=..."). Joining with an inserted
+% space (the previous behaviour) corrupted every such keyword. Since
+% Gaussian never leaves a genuine trailing space before the forced wrap,
+% concatenating the lines directly (no separator) reconstructs the
+% original text correctly in both cases: a mid-word split rejoins
+% cleanly, and a wrap that happens to fall between two words still has
+% its separating space, because that space is part of the line content
+% itself, not the join. A final whitespace-collapse tidies up the rare
+% double space this can otherwise leave.
+route = regexprep(strtrim(strjoin(route_lines, '')), '\s+', ' ');
 fprintf('Route: %s\n', route);
 
 end  % G09_route

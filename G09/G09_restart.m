@@ -99,9 +99,25 @@ end
 route_lines = {};
 for k = route_sep_start+1 : route_sep_end-1
     ln = strtrim(lines{k});
-    if ~isempty(ln), route_lines{end+1} = ln; end %#ok<AGROW>
+    if ~isempty(ln)
+        % Strip only the leading indent space; keep any trailing
+        % whitespace exactly as printed (see join comment below).
+        route_lines{end+1} = regexprep(lines{k}, '^\s+', ''); %#ok<AGROW>
+    end
 end
-route_str = strtrim(strjoin(route_lines, ' '));
+% Gaussian wraps the route echo at a fixed column with no regard for word
+% boundaries, so a keyword can be split mid-word across two lines (e.g.
+% "nosym" / "m geom=..." for "nosymm geom=..."). Joining with an inserted
+% space (the previous behaviour) corrupted every such keyword -- and
+% since this route is fed straight back into a new Gaussian input file,
+% a corrupted keyword here would silently break the restarted job.
+% Gaussian never leaves a genuine trailing space before the forced wrap,
+% so concatenating with no separator reconstructs the original text
+% correctly whether the wrap fell mid-word or between two words (any
+% real separating space is part of the line content itself, not the
+% join). A final whitespace-collapse tidies up the rare double space
+% this can otherwise leave.
+route_str = regexprep(strtrim(strjoin(route_lines, '')), '\s+', ' ');
 if ~isempty(extra_route)
     route_str = [route_str, ' ', extra_route];
 end
@@ -148,11 +164,23 @@ if ~isempty(new_chk),   fprintf(fid, '%%chk=%s\n',          new_chk);   end
 if ~isempty(nproc_str), fprintf(fid, '%%nprocshared=%s\n',  nproc_str); end
 if ~isempty(mem_str),   fprintf(fid, '%%mem=%s\n',          mem_str);   end
 
-% Wrap route at 72 chars
+% Wrap route at 72 chars. wrap_route only ever breaks between whole
+% tokens (never mid-word), so every wrap point here is a genuine word
+% boundary; a trailing space on all but the last chunk records that
+% explicitly, so a reader that reconstructs wrapped lines by
+% concatenating with no separator (see G_read_input.m/G09_route.m/
+% G16_route.m -- Gaussian's own route echo can wrap mid-word, so those
+% readers cannot assume a trailing space marks a real word boundary the
+% way this writer can) doesn't merge the last word of one line into the
+% first word of the next.
 wrapped = wrap_route(route_str, 72);
 fprintf(fid, '%s\n', repmat('-',1,70));
 for i = 1:numel(wrapped)
-    fprintf(fid, ' %s\n', wrapped{i});
+    if i < numel(wrapped)
+        fprintf(fid, ' %s \n', wrapped{i});
+    else
+        fprintf(fid, ' %s\n', wrapped{i});
+    end
 end
 fprintf(fid, '%s\n', repmat('-',1,70));
 

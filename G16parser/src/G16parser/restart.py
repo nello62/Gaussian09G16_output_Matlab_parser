@@ -110,8 +110,19 @@ def g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem="
     if route_sep_start is None or route_sep_end is None:
         raise ValueError(f"g16_restart: route section not found in {filename}")
 
-    route_lines = [lines[k].strip() for k in range(route_sep_start + 1, route_sep_end) if lines[k].strip()]
-    route_str = " ".join(route_lines).strip()
+    # Gaussian wraps the route echo at a fixed column with no regard for
+    # word boundaries, so a keyword can be split mid-word across two lines
+    # (e.g. "nosym" / "m cphf=..." for "nosymm cphf=..."). Joining with an
+    # inserted space (the previous behaviour) corrupted every such
+    # keyword -- and since this route is fed straight back into a new
+    # Gaussian input file, a corrupted keyword here would silently break
+    # the restarted job. Gaussian never leaves a genuine trailing space
+    # before the forced wrap, so concatenating with no separator (only
+    # left-stripping each line's leading indent, not its trailing
+    # whitespace) reconstructs the original text correctly whether the
+    # wrap fell mid-word or between two words.
+    route_lines = [lines[k].lstrip() for k in range(route_sep_start + 1, route_sep_end) if lines[k].strip()]
+    route_str = re.sub(r"\s+", " ", "".join(route_lines).strip())
     if extra_route:
         route_str = f"{route_str} {extra_route}"
 
@@ -146,10 +157,20 @@ def g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem="
         if mem_str:
             f.write(f"%mem={mem_str}\n")
 
+        # _wrap_route only ever breaks between whole tokens (never
+        # mid-word), so every wrap point here is a genuine word boundary;
+        # a trailing space on all but the last chunk records that
+        # explicitly, so a reader that reconstructs wrapped lines by
+        # concatenating with no separator (see read_input.py -- Gaussian's
+        # own route echo can wrap mid-word, so that reader cannot assume a
+        # trailing space marks a real word boundary the way this writer
+        # can) doesn't merge the last word of one line into the first
+        # word of the next.
         wrapped = _wrap_route(route_str, 72)
         f.write("-" * 70 + "\n")
-        for w in wrapped:
-            f.write(f" {w}\n")
+        for idx, w in enumerate(wrapped):
+            sep = " " if idx < len(wrapped) - 1 else ""
+            f.write(f" {w}{sep}\n")
         f.write("-" * 70 + "\n")
 
         f.write(f"\n{title_line}\n\n")

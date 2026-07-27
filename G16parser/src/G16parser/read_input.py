@@ -103,9 +103,17 @@ def g16_read_input(filename):
                 # route immediately rather than being skipped over.
                 i += 1
                 break
-            route_lines.append(tln)
+            # Keep only the leading indent stripped; preserve any trailing
+            # whitespace exactly as printed (see join comment below).
+            route_lines.append(lines[i].lstrip())
             i += 1
-    route = " ".join(route_lines).strip()
+    # If a route keyword happens to be wrapped mid-word across two lines,
+    # joining with an inserted space (the previous behaviour) would
+    # corrupt it (e.g. "nosym" / "m ..." for "nosymm ..."). Concatenating
+    # with no separator instead reconstructs the original text correctly
+    # whether the wrap fell mid-word or between two words (any real
+    # separating space is part of the line content itself, not the join).
+    route = re.sub(r"\s+", " ", "".join(route_lines).strip())
 
     method = basis = ""
     rtoks = route.split()

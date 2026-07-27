@@ -69,7 +69,9 @@ for k = 1:N
         % First non-separator line after the first sep: must start with #
         if ~isempty(regexp(ln, '^#', 'once'))
             in_route = true;
-            route_lines{end+1} = ln; %#ok<AGROW>
+            % Strip only the leading indent space; keep any trailing
+            % whitespace exactly as printed (see join comment below).
+            route_lines{end+1} = regexprep(lines{k}, '^\s+', ''); %#ok<AGROW>
         else
             % Not a route line (e.g. title before the real separator): reset
             found_first_sep = false;
@@ -78,7 +80,7 @@ for k = 1:N
     end
 
     if in_route
-        route_lines{end+1} = ln; %#ok<AGROW>
+        route_lines{end+1} = regexprep(lines{k}, '^\s+', ''); %#ok<AGROW>
     end
 end
 
@@ -86,8 +88,19 @@ if isempty(route_lines)
     error('G16_route: route section not found in %s', filename);
 end
 
-% Join all continuation lines into one string
-route = strtrim(strjoin(route_lines, ' '));
+% Gaussian wraps the route echo at a fixed column with no regard for word
+% boundaries, so a keyword can be split mid-word across two lines (e.g.
+% "nosym" / "m cphf=..." for "nosymm cphf=..."). Joining with an inserted
+% space (the previous behaviour) corrupted every such keyword. Since
+% Gaussian never leaves a genuine trailing space before the forced wrap,
+% concatenating the lines directly (no separator) reconstructs the
+% original text correctly in both cases: a mid-word split rejoins
+% cleanly, and a wrap that happens to fall between two words still has
+% its separating space, because that space is part of the line content
+% itself, not the join. A final whitespace-collapse tidies up the rare
+% double space this can otherwise leave (e.g. if a wrap coincides with a
+% word boundary and both leading/trailing spaces would survive).
+route = regexprep(strtrim(strjoin(route_lines, '')), '\s+', ' ');
 
 fprintf('Route: %s\n', route);
 
