@@ -70,9 +70,20 @@ function data = G09_fchk_read(filename, varargin)
 %       .polar_iso    double        isotropic polarisability (au)
 %       .polar_aniso  double        polarisability anisotropy (au)
 %
-%       .beta_au      struct        first hyperpolarisability β (au)
+%       .beta_au      struct        static first hyperpolarisability β (au),
+%                                   from the "HyperPolarizability" .fchk
+%                                   section, [] / NaN fields if absent
 %                       .xxx .xxy .xyy .yyy .xxz .xyz .yyz .xzz .yzz .zzz
-%       .beta_vec     double        |β_vec| = sqrt(βx²+βy²+βz²) (au)
+%       .beta_vec     double        |β_vec| = sqrt(βx²+βy²+βz²) (au), static
+%                                   only -- NaN if absent (see has_dynamic_beta)
+%       .has_dynamic_beta logical   true if the file contains a
+%                                   frequency-dependent hyperpolarisability
+%                                   section (e.g. "Beta(-w,w,0)" from a
+%                                   CPHF=RdFreq job) that is NOT decoded into
+%                                   beta_au/beta_vec -- this parser only
+%                                   reads the static Beta(0;0,0) tensor. A
+%                                   warning is printed when this is true and
+%                                   beta_vec is NaN, so the gap is not silent.
 %
 %       .dipole_deriv [3 x 3Nat]    dipole derivatives dμ/dR (au, [x/y/z, 3Nat])
 %                                   dmu_x = data.dipole_deriv(1,:)
@@ -431,6 +442,23 @@ if numel(hyper_raw) >= 10
     end
 end
 
+% Detect (without decoding) frequency-dependent hyperpolarisability data,
+% e.g. from a CPHF=RdFreq job -- Gaussian stores this under a
+% differently-shaped section (commonly "Beta(-w,w,0)", a flat 36-value
+% array) that this parser does not yet know how to decode into beta_au/
+% beta_vec. Rather than silently leaving beta_vec = NaN with no
+% indication that hyperpolarisability data actually exists in the file,
+% flag it explicitly via has_dynamic_beta and a warning.
+has_dynamic_beta = any(~cellfun(@isempty, regexpi(sec_names, '^Beta\(.*\)$')));
+if has_dynamic_beta && isnan(beta_vec)
+    warning('G09_fchk_read:dynamicBetaNotParsed', ...
+        ['%s contains a frequency-dependent hyperpolarisability section ' ...
+         '(dynamic Beta, e.g. from CPHF=RdFreq) that this parser does not ' ...
+         'yet decode -- beta_au/beta_vec are NaN even though ' ...
+         'hyperpolarisability data is present. See data.has_dynamic_beta.'], ...
+        filename);
+end
+
 % -------------------------------------------------------------------------
 % Dipole derivatives  dμ/dR  (APT tensor)
 % -------------------------------------------------------------------------
@@ -506,6 +534,7 @@ data.polar_aniso  = pol_aniso;
 
 data.beta_au      = beta;
 data.beta_vec     = beta_vec;
+data.has_dynamic_beta = has_dynamic_beta;
 
 data.dipole_deriv = dip_deriv;
 data.polar_deriv  = pol_deriv;
