@@ -82,6 +82,15 @@ function data = G09_fchk_read(filename, varargin)
 %
 %   .filename   char                source file path
 %
+%   Also returns three compatibility sub-structs, so results can be fed
+%   straight into the corresponding visualisation functions without any
+%   manual conversion:
+%       .mol   char   compatible with G09_draw_molecule(data.mol)
+%       .ch    char   compatible with G09_charges_fchk(data.mol, data.ch)
+%                     -- NOT G09_charges, which only accepts a
+%                     .log/.out filename, not a pre-parsed struct
+%       .nm    char   compatible with G09_draw_mode(data.mol, data.nm, mode_idx)
+%
 %   Example:
 %       data = G09_fchk_read('3typ.fchk');
 %       data.gap_eV                     % HOMO-LUMO gap in eV
@@ -89,6 +98,10 @@ function data = G09_fchk_read(filename, varargin)
 %       data.polar_iso                  % isotropic polarisability in au
 %       data.force_const(1:6,1:6)       % top-left of force constant matrix
 %       data.mulliken_charges           % Mulliken charges
+%       G09_draw_molecule(data.mol);
+%       G09_charges_fchk(data.mol, data.ch);
+%
+%   See also G09_CHARGES_FCHK, G09_DRAW_MOLECULE, G09_DRAW_MODE.
 
 % -------------------------------------------------------------------------
 % Parse arguments
@@ -500,7 +513,7 @@ data.polar_deriv  = pol_deriv;
 data.filename     = filename;
 
 % -------------------------------------------------------------------------
-% Build compatibility sub-structs for G09_draw_molecule, G09_charges,
+% Build compatibility sub-structs for G09_draw_molecule, G09_charges_fchk,
 % G09_draw_mode
 % -------------------------------------------------------------------------
 
@@ -515,7 +528,8 @@ mol.orientation = 'fchk (Input orientation)';
 mol.filename    = filename;
 data.mol        = mol;
 
-% ── ch  (compatible with G09_charges) ────────────────────────────────────
+% ── ch  (compatible with G09_charges_fchk, NOT G09_charges -- that one
+%        only accepts a .log/.out filename, not a pre-parsed struct) ────
 % Mulliken charges are always in the .fchk file
 ch.symbols   = symbols;
 ch.charges   = mull_chg;
@@ -715,7 +729,7 @@ data.nm = nm;
 if verbose
     fprintf('\n  Compatibility sub-structs ready:\n');
     fprintf('    data.mol  → G09_draw_molecule(data.mol)\n');
-    fprintf('    data.ch   → G09_charges uses data.ch directly\n');
+    fprintf('    data.ch   → G09_charges_fchk(data.mol, data.ch)\n');
     fprintf('    data.nm   → G09_draw_mode(data.mol, data.nm, mode_idx)\n');
     fprintf('  Done.\n\n');
 end
