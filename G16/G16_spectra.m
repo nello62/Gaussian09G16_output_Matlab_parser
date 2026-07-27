@@ -14,6 +14,10 @@ function sp = G16_spectra(filename, varargin)
 %       'plot'      - generate figure after extraction                 (default: false)
 %       'section'   - 'last' use the last Harmonic freq section      (default: 'last')
 %                     'first' use the first section
+%       'Lines'     - pre-read cell array of file lines, to skip
+%                     re-reading the file when it has already been read
+%                     elsewhere (e.g. G16_READ_ALL). Default {} (read
+%                     the file normally).
 %
 %   OUTPUT  struct sp with fields:
 %       .freq        [Nmodes×1]   frequenze in cm⁻¹

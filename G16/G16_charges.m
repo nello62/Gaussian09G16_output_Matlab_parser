@@ -45,6 +45,10 @@ function ch = G16_charges(filename, varargin)
 %       'DipoleUnits'     - units used to display |mu| (arrow label and
 %                           command-window table) when 'ShowDipole' is
 %                           true: 'Debye' (default) | 'au'
+%       'Lines'           - pre-read cell array of file lines, to skip
+%                           re-reading the file when it has already been
+%                           read elsewhere (e.g. G16_READ_ALL). Default
+%                           {} (read the file normally).
 %
 %   OUTPUT  struct ch with fields:
 %       .symbols        {Natoms x 1}   atomic symbols

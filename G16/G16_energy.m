@@ -25,6 +25,11 @@ function en = G16_energy(filename, varargin)
 %
 %   Note: for opt-only jobs (no freq), has_thermo = false
 %         e the *_corr, E0, U, H, G, T, P fields will be NaN.
+%
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines, to skip re-reading
+%                  the file when it has already been read elsewhere (e.g.
+%                  G16_READ_ALL). Default {} (read the file normally).
 
 % -------------------------------------------------------------------------
 % Parse input arguments

@@ -40,6 +40,11 @@ function dp = G16_dipole_polar(filename, varargin)
 %         and as "IR Inten" for |dmu/dQ|². For exact values
 %         use G16_spectra which returns correctly scaled IR and Raman activities.
 %
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines, to skip re-reading
+%                  the file when it has already been read elsewhere (e.g.
+%                  G16_READ_ALL). Default {} (read the file normally).
+%
 %   Example:
 %       dp = G16_dipole_polar('V_E00t.out');
 %       dp.mu_tot          % modulo dipolo in Debye

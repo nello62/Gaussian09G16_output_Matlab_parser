@@ -19,6 +19,11 @@ function nm = G16_nmodes(filename, varargin)
 %       .Natoms      int
 %       .has_Raman   logical
 %       .filename    char
+%
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines, to skip re-reading
+%                  the file when it has already been read elsewhere (e.g.
+%                  G16_READ_ALL). Default {} (read the file normally).
 
 % -------------------------------------------------------------------------
 % Parse input arguments

@@ -17,6 +17,11 @@ function mol = G16_structure(filename, varargin)
 %   .orientation  char           'standard' or 'input'
 %   .filename  char              source file path
 %
+%   Optional parameters also include:
+%       'Lines'  - pre-read cell array of file lines, to skip re-reading
+%                  the file when it has already been read elsewhere (e.g.
+%                  G16_READ_ALL). Default {} (read the file normally).
+%
 % EXAMPLES:
 %   mol = G16_structure('zeatin.out');
 %   mol = G16_structure('opt_traj.out', 'step', 1);   % initial geometry
