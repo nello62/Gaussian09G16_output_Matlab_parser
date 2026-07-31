@@ -10,7 +10,7 @@ from .get_bond_length import g16_get_bond_length
 def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=False,
                       atom_scale=0.35, bond_tol=1.30, show_labels=False,
                       frames_per_cycle=30, n_cycles=2, fps=20, view=None,
-                      progress_callback=None):
+                      dpi=150, progress_callback=None):
     """Exports an MP4 animation of a vibrational mode.
 
     Python port of G16_animate_mode.m: oscillates the molecule along the
@@ -37,6 +37,10 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
     frames_per_cycle : int — frames per oscillation period (default 30)
     n_cycles : int — number of periods rendered (default 2)
     fps : int — video frame rate (default 20)
+    dpi : int — figure resolution for the saved video (default 150; the
+        matplotlib figure default of 100 combined with the default figure
+        size gives only 640x480, encoded at a low bitrate that looks
+        noticeably compressed/blocky -- 150 gives a sharper 960x720 video)
     view : tuple (azim, elev) in degrees, optional — starting camera
         orientation (default None = matplotlib's default 3D view). Pass
         (ax.azim, ax.elev) from a figure you have already rotated
@@ -84,6 +88,19 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
     ylim = (extreme[:, 1].min() - pad, extreme[:, 1].max() + pad)
     zlim = (extreme[:, 2].min() - pad, extreme[:, 2].max() + pad)
 
+    # Force equal aspect ratio (same cube-shaped box on all three axes),
+    # same as g16_draw_molecule's own _set_axes_equal. Without this, a
+    # molecule whose bounding box is not roughly cubic (e.g. a mostly
+    # planar/aromatic one, common here) gets one axis visibly compressed
+    # relative to the others -- CPK spheres render as flattened ellipses,
+    # not obvious from every camera angle but very visible once rotated
+    # to look more edge-on along the compressed axis.
+    _mid = [(lo + hi) / 2 for lo, hi in (xlim, ylim, zlim)]
+    _radius = max(hi - lo for lo, hi in (xlim, ylim, zlim)) / 2
+    xlim = (_mid[0] - _radius, _mid[0] + _radius)
+    ylim = (_mid[1] - _radius, _mid[1] + _radius)
+    zlim = (_mid[2] - _radius, _mid[2] + _radius)
+
     # Fixed bond list (and bond order) from the equilibrium geometry, so
     # bonds do not appear/disappear or flicker between single/double/
     # triple frame to frame as instantaneous distances oscillate across
@@ -122,8 +139,17 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
         return []
 
     ani = animation.FuncAnimation(fig, update, frames=total_frames, blit=False)
-    ani.save(filename, writer=animation.FFMpegWriter(fps=fps),
-             progress_callback=progress_callback)
+    # bitrate=-1 (do not force a fixed bitrate) + a CRF-based quality
+    # target via extra_args gives a much sharper result than
+    # FFMpegWriter's own low-bitrate default (previously ~160 kbps at
+    # 640x480, visibly blocky); yuv420p keeps the output playable in
+    # QuickTime and most other players, which can choke on matplotlib's
+    # raw output pixel format otherwise.
+    writer = animation.FFMpegWriter(
+        fps=fps, bitrate=-1,
+        extra_args=["-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p"],
+    )
+    ani.save(filename, writer=writer, dpi=dpi, progress_callback=progress_callback)
     plt.close(fig)
 
     print(f"g16_animate_mode: animation saved to {filename} ({total_frames} frames, {fps} fps)")
