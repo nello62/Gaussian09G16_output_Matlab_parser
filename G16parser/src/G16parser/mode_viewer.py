@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
@@ -216,6 +217,8 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
 
     animate_btn = ttk.Button(frm, text="Animate mode (MP4)...")
     animate_btn.pack(fill="x", pady=(10, 0))
+    animate_progress_var = tk.StringVar(value="")
+    ttk.Label(frm, textvariable=animate_progress_var, foreground="#737373").pack(anchor="w")
 
     ttk.Label(frm, text=f"{nm.Natoms} atoms  |  {nm.Nmodes} modes  |  file: {filename}",
               foreground="#737373", wraplength=panel_w - 20).pack(anchor="w", pady=(15, 0))
@@ -362,8 +365,33 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
             ax_target = target.axes[0]
             view = (ax_target.azim, ax_target.elev)
 
-        animate_btn.config(text="Rendering...", state="disabled")
+        # Rendering + encoding can take well over a minute for a large
+        # molecule (matplotlib re-draws the whole 3D scene per frame, then
+        # ffmpeg encodes it). This MUST stay on the main thread: matplotlib
+        # with the TkAgg backend (which this package forces by default) is
+        # not thread-safe -- an earlier attempt to render in a background
+        # thread produced a corrupted, static, flattened-perspective video,
+        # because Tk/TkAgg state was being touched from two threads at
+        # once. Instead, keep everything synchronous but pump Tk's own
+        # event queue from inside the progress callback (still called on
+        # the main thread, once per frame) via update_idletasks()/update(),
+        # so the window keeps repainting and doesn't look frozen/crashed
+        # even though it cannot be interacted with until rendering
+        # finishes.
+        animate_btn.config(text="Rendering... 0%", state="disabled")
+        animate_progress_var.set("Starting...")
         root.update_idletasks()
+
+        def on_progress(current_frame, total_frames):
+            # matplotlib reports current_frame 0-based; show a 1-based
+            # count (1/8 ... 8/8) since that is what a human expects here.
+            done = current_frame + 1
+            pct = int(100 * done / total_frames) if total_frames else 0
+            animate_btn.config(text=f"Rendering... {pct}%")
+            animate_progress_var.set(f"Frame {done}/{total_frames}")
+            root.update_idletasks()
+            root.update()
+
         try:
             g16_animate_mode(
                 mol, nm, k, filename=out_file,
@@ -373,9 +401,13 @@ def g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
                 show_labels=bool(show_labels_var.get()),
                 flip_sign=bool(flip_sign_var.get()),
                 view=view,
+                progress_callback=on_progress,
             )
         except Exception as e:
+            animate_progress_var.set("")
             messagebox.showerror("g16_animate_mode error", str(e), parent=root)
+        else:
+            animate_progress_var.set(f"Saved: {os.path.basename(out_file)}")
         finally:
             animate_btn.config(text="Animate mode (MP4)...", state="normal")
 

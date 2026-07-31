@@ -9,7 +9,8 @@ from .get_bond_length import g16_get_bond_length
 
 def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=False,
                       atom_scale=0.35, bond_tol=1.30, show_labels=False,
-                      frames_per_cycle=30, n_cycles=2, fps=20, view=None):
+                      frames_per_cycle=30, n_cycles=2, fps=20, view=None,
+                      progress_callback=None):
     """Exports an MP4 animation of a vibrational mode.
 
     Python port of G16_animate_mode.m: oscillates the molecule along the
@@ -40,6 +41,12 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
         orientation (default None = matplotlib's default 3D view). Pass
         (ax.azim, ax.elev) from a figure you have already rotated
         interactively.
+    progress_callback : callable(current_frame, total_frames), optional —
+        forwarded to matplotlib's FuncAnimation.save(), called after each
+        frame is written. Rendering + encoding a full animation can take
+        well over a minute for a large molecule with no other feedback
+        otherwise; useful for a caller (e.g. a GUI) to show progress
+        instead of appearing frozen.
 
     Returns
     -------
@@ -115,7 +122,8 @@ def g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=Fals
         return []
 
     ani = animation.FuncAnimation(fig, update, frames=total_frames, blit=False)
-    ani.save(filename, writer=animation.FFMpegWriter(fps=fps))
+    ani.save(filename, writer=animation.FFMpegWriter(fps=fps),
+             progress_callback=progress_callback)
     plt.close(fig)
 
     print(f"g16_animate_mode: animation saved to {filename} ({total_frames} frames, {fps} fps)")
