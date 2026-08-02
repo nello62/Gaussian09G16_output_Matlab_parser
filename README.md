@@ -77,6 +77,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `charge_mult` | Molecular charge and spin multiplicity |
 | `route` | Route section string |
 | `get_bond_length` | Bond-length table from covalent radii |
+| `nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
 | `gaussian_version` | Detects the Gaussian version/revision that produced the file (works on `.fchk` via a sibling `.log`/`.out`) |
 | `read_all` | Runs the full extraction set in one call, reading the file only once |
 | `batch_read_all` | Runs `read_all` (+ `orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary table; per-file failures are recorded, not fatal |
@@ -107,6 +108,24 @@ installed on your machine (returns a `table`, filterable by description).
 
 All Name-Value options, output struct fields, and examples are documented in
 each function's own help text (`help G16_charges`, etc.).
+
+### Rendering NBO-derived bond orders
+
+`draw_molecule`'s bond-order guess is a geometric estimate (bond length
+only, C-C/C-O pairs). For a real bond order derived from Gaussian's own
+NBO analysis, feed `nbo_bonds`'s output into `draw_molecule`'s `'BondList'`
+parameter — a `[Nbonds x 3]` matrix of `Atom1`, `Atom2`, `BondOrder`:
+
+```matlab
+mol = G16_structure('molecule_nbo.out');
+bt  = G16_nbo_bonds('molecule_nbo.out');       % requires 'pop=nbo' in the source job
+
+bond_list = [bt.Atom1, bt.Atom2, double(bt.BondOrder)];
+G16_draw_molecule(mol, 'BondList', bond_list);
+```
+
+The rendered double/triple bonds then reflect the actual NBO bonding
+(BD) orbital count instead of the length-based heuristic.
 
 ## Python port
 

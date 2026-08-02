@@ -89,6 +89,7 @@ main [README](../README.md).
 | `g16_charge_mult` | Molecular charge and spin multiplicity |
 | `g16_route` | Route section string |
 | `g16_get_bond_length` | Bond-length table (pandas DataFrame) from covalent radii |
+| `g16_nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
 | `g16_gaussian_version` | Detects the Gaussian version/revision (works on `.fchk` via a sibling `.log`/`.out`) |
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
@@ -102,6 +103,25 @@ main [README](../README.md).
 | `g16_animate_mode` | Exports an MP4 animation of a vibrational mode (requires `ffmpeg`) |
 | `g16_mode_viewer` | Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity, with an "Animate mode (MP4)..." button |
 | `g16_list` | Lists every function in the toolbox with its one-line description (pandas DataFrame) |
+
+### Rendering NBO-derived bond orders
+
+`g16_draw_molecule`'s bond-order guess is a geometric estimate (bond
+length only, C-C/C-O pairs). For a real bond order derived from
+Gaussian's own NBO analysis, feed `g16_nbo_bonds`'s output into
+`g16_draw_molecule`'s `bond_list=` parameter — an `[Nbonds x 3]` array of
+`Atom1`, `Atom2`, `BondOrder`:
+
+```python
+mol = g16.g16_structure('molecule_nbo.out')
+bt  = g16.g16_nbo_bonds('molecule_nbo.out')   # requires 'pop=nbo' in the source job
+
+bond_list = bt[['Atom1', 'Atom2', 'BondOrder']].to_numpy()
+g16.g16_draw_molecule(mol, bond_list=bond_list)
+```
+
+The rendered double/triple bonds then reflect the actual NBO bonding
+(BD) orbital count instead of the length-based heuristic.
 
 ## Notes on the port
 
@@ -159,7 +179,13 @@ main [README](../README.md).
   bond order purely from bond length for C-C and C-O pairs (any other
   element pair, including C-N, is always drawn as a single bond),
   rendered as 1/2/3 parallel lines — a geometric estimate, not
-  Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices). C-N is
+  Gaussian's own bond-order analysis (e.g. Wiberg/NBO indices). For an
+  actual bond order derived from Gaussian's own NBO analysis (not a
+  geometric guess), use `g16_nbo_bonds` — it requires the source job to
+  have been run with the `pop=nbo` keyword (or similar), and counts, per
+  atom pair, how many bonding (BD) natural bond orbitals NBO assigned to
+  it (1 BD = single, 2 = double, 3 = triple). Raises `ValueError` if the
+  file has no NBO section. C-N is
   deliberately excluded: a single length threshold cannot separate
   aromatic C-N (e.g. pyridine, ~1.34 Å) from a genuine C=N, and using
   one produced one ring C-N bond drawn double and its
