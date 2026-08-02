@@ -125,7 +125,14 @@ G16_draw_molecule(mol, 'BondList', bond_list);
 ```
 
 The rendered double/triple bonds then reflect the actual NBO bonding
-(BD) orbital count instead of the length-based heuristic.
+(BD) orbital count instead of the length-based heuristic. `charges`
+accepts the same `'BondList'` parameter, passed straight through to its
+internal `draw_molecule` call, so the charge overlay renders on top of
+the NBO-derived bonds too:
+
+```matlab
+G16_charges('molecule_nbo.out', 'BondList', bond_list, 'ShowDipole', true);
+```
 
 ## Python port
 

@@ -23,6 +23,14 @@ function ch = G16_charges(filename, varargin)
 %       'plot'            - true  renders labels on 3D structure (default: true)
 %       'AtomScale'       - CPK sphere scale (default: 0.35)
 %       'BondTol'         - bond detection tolerance (default: 1.30)
+%       'BondList'        - passed straight through to G16_DRAW_MOLECULE:
+%                           [Nbonds x 2] or [Nbonds x 3] explicit atom-index
+%                           pairs (optionally with a 3rd column giving a
+%                           pre-computed bond order 1/2/3), bypassing the
+%                           BondTol distance criterion. Useful to render
+%                           the real bond order from G16_NBO_BONDS instead
+%                           of the geometric estimate (default: [] =
+%                           auto-detect from BondTol)
 %       'FontSize'        - label font size in points (default: 8)
 %       'ColorScale'      - 'RdBu' blue=neg/red=pos (default) | 'none'
 %       'threshold'       - hide labels with |q| < threshold (default: 0)
@@ -79,6 +87,7 @@ addParameter(p, 'mode',       'atom',     @ischar);
 addParameter(p, 'plot',       true,       @islogical);
 addParameter(p, 'AtomScale',  0.35,       @isnumeric);
 addParameter(p, 'BondTol',    1.30,       @isnumeric);
+addParameter(p, 'BondList',   [],         @isnumeric);
 addParameter(p, 'FontSize',   8,          @isnumeric);
 addParameter(p, 'ColorScale', 'RdBu',     @ischar);
 addParameter(p, 'threshold',  0,          @isnumeric);
@@ -98,6 +107,7 @@ mode        = lower(p.Results.mode);
 do_plot     = p.Results.plot;
 atom_scale  = p.Results.AtomScale;
 bond_tol    = p.Results.BondTol;
+bond_list   = p.Results.BondList;
 fsize       = p.Results.FontSize;
 cscale      = p.Results.ColorScale;
 thr         = p.Results.threshold;
@@ -337,8 +347,8 @@ if do_plot
         'Name', sprintf('%s charges', charge_type), 'NumberTitle', 'off');
     ax  = axes('Parent', fig);
     G16_draw_molecule(mol, 'Ax', ax, 'AtomScale', atom_scale, ...
-        'BondTol', bond_tol, 'ShowLabels', false, 'ShowLegend', true, ...
-        'Title', sprintf('%s — %s charges (%s)', ...
+        'BondTol', bond_tol, 'BondList', bond_list, 'ShowLabels', false, ...
+        'ShowLegend', true, 'Title', sprintf('%s — %s charges (%s)', ...
             strrep(fname, '_', '\_'), charge_type, mode));
 
     % Coordinates for label placement

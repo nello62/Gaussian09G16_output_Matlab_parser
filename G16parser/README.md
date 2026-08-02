@@ -117,11 +117,20 @@ mol = g16.g16_structure('molecule_nbo.out')
 bt  = g16.g16_nbo_bonds('molecule_nbo.out')   # requires 'pop=nbo' in the source job
 
 bond_list = bt[['Atom1', 'Atom2', 'BondOrder']].to_numpy()
+bond_list[:, :2] -= 1   # g16_nbo_bonds uses 1-based Gaussian atom numbers;
+                        # g16_draw_molecule's bond_list is 0-based
 g16.g16_draw_molecule(mol, bond_list=bond_list)
 ```
 
 The rendered double/triple bonds then reflect the actual NBO bonding
-(BD) orbital count instead of the length-based heuristic.
+(BD) orbital count instead of the length-based heuristic. `g16_charges`
+accepts the same `bond_list=` parameter, passed straight through to its
+internal `g16_draw_molecule` call, so the charge overlay renders on top
+of the NBO-derived bonds too:
+
+```python
+g16.g16_charges('molecule_nbo.out', bond_list=bond_list, show_dipole=True)
+```
 
 ## Notes on the port
 

@@ -67,7 +67,8 @@ def _origin_label(spec):
 
 
 def g16_charges(filename, type="Mulliken", mode="atom", plot=True,
-                atom_scale=0.35, bond_tol=1.30, font_size=8, color_scale="RdBu",
+                atom_scale=0.35, bond_tol=1.30, bond_list=None, font_size=8,
+                color_scale="RdBu",
                 threshold=0.0, show_dipole=False, dipole_origin="negcharge",
                 dipole_scale=1.0, dipole_color=(0, 0.6, 0), dipole_line_width=2.5,
                 show_dipole_label=True, dipole_font_size=11, dipole_units="Debye",
@@ -78,6 +79,13 @@ def g16_charges(filename, type="Mulliken", mode="atom", plot=True,
 
     See G16_charges.m for the full parameter/field documentation — this
     is a line-by-line Python port with the same defaults and behaviour.
+
+    bond_list is passed straight through to g16_draw_molecule: an
+    [Nbonds x 2] or [Nbonds x 3] array of explicit atom-index pairs
+    (optionally with a 3rd column giving a pre-computed bond order
+    1/2/3), bypassing the bond_tol distance criterion. Useful to render
+    the real bond order from g16_nbo_bonds instead of the geometric
+    estimate.
 
     Returns
     -------
@@ -198,7 +206,7 @@ def g16_charges(filename, type="Mulliken", mode="atom", plot=True,
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
         g16_draw_molecule(mol, ax=ax, atom_scale=atom_scale, bond_tol=bond_tol,
-                           show_labels=False, show_legend=True,
+                           bond_list=bond_list, show_labels=False, show_legend=True,
                            title=f"{fname} — {type} charges ({mode})")
 
         if mode == "atom":

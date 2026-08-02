@@ -33,6 +33,21 @@ def sample_out():
 
 
 @pytest.fixture(scope="session")
+def sample_nbo_out():
+    """Path to a real Gaussian .out/.log file with an NBO analysis
+    (pop=nbo), used by g16_nbo_bonds tests. Distinct from sample_out
+    since most fixture files (e.g. test.out) have no NBO section.
+
+    Skips (rather than fails) any test that depends on it if no such
+    file is present yet.
+    """
+    candidates = sorted(FIXTURES_DIR.glob("*NBO*")) + sorted(FIXTURES_DIR.glob("*nbo*"))
+    if not candidates:
+        pytest.skip("No NBO-analysis sample file in tests/fixtures/ yet")
+    return str(candidates[0])
+
+
+@pytest.fixture(scope="session")
 def sample_gjf():
     """Path to the small synthetic Gaussian input file used for
     g16_read_input / g16_restart round-trip tests. Synthetic (hand-written,

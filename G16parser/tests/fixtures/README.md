@@ -17,3 +17,11 @@ exercises.
 If this file is ever removed, any `.out`/`.log` file dropped into this
 folder (any filename) is picked up automatically by the same fixture; the
 tests that depend on it are skipped (not failed) when none is present.
+
+`CH4_NBO.LOG` is a real Gaussian output file (`opt freq=raman
+b3lyp/6-311++g(d,p) pop=nbo geom=connectivity polar`, a multi-step
+opt+freq+polar job on CH4) used by `test_nbo_bonds.py` via the
+`sample_nbo_out` fixture in `conftest.py`. It is the only fixture with an
+actual NBO analysis (`pop=nbo`) section, needed to test
+`g16_nbo_bonds`; `test.out` deliberately has no NBO data, which is used
+to test `g16_nbo_bonds`'s "no NBO analysis found" error path.

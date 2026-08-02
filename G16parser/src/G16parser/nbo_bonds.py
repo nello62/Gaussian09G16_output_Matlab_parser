@@ -53,9 +53,14 @@ def g16_nbo_bonds(filename, section="last", lines=None):
     Returns
     -------
     bond_table : pandas.DataFrame with columns Atom1, Sym1, Atom2, Sym2
-        (Atom1/Atom2 1-based, Atom1 < Atom2), BondOrder (int, count of BD
-        orbitals for this pair), Occupancy (summed NBO occupancy, ~2 per
-        BD orbital).
+        (Atom1/Atom2 1-based, matching Gaussian's own atom numbering,
+        Atom1 < Atom2), BondOrder (int, count of BD orbitals for this
+        pair), Occupancy (summed NBO occupancy, ~2 per BD orbital).
+
+    Note: to feed this table into g16_draw_molecule's bond_list=
+    parameter (0-based atom indices), subtract 1 from Atom1/Atom2 first:
+        bond_list = bond_table[["Atom1", "Atom2", "BondOrder"]].to_numpy()
+        bond_list[:, :2] -= 1
 
     Example
     -------
