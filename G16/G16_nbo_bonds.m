@@ -47,6 +47,10 @@ function bt = G16_nbo_bonds(filename, varargin)
 %       bt = G16_nbo_bonds('molecule_nbo.out');
 %
 %   See also G16_GET_BOND_LENGTH, G16_DRAW_MOLECULE.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'filename', @ischar);

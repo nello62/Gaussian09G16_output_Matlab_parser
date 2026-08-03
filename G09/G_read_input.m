@@ -42,6 +42,10 @@ function ginp = G_read_input(filename)
 %
 %   See also G09_STRUCTURE, G16_STRUCTURE, G09_DRAW_MOLECULE,
 %            G16_DRAW_MOLECULE, G09_RESTART.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 if ~isfile(filename)
     error('G_read_input: file not found: %s', filename);

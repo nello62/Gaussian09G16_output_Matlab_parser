@@ -113,6 +113,10 @@ function data = G09_fchk_read(filename, varargin)
 %       G09_charges_fchk(data.mol, data.ch);
 %
 %   See also G09_CHARGES_FCHK, G09_DRAW_MOLECULE, G09_DRAW_MODE.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse arguments

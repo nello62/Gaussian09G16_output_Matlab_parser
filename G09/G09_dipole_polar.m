@@ -33,6 +33,10 @@ function dp = G09_dipole_polar(filename, varargin)
 %       .has_alpha_vib      logical
 %       .alpha_approx       [3x3] CPHF approximate tensor (au), NaN if absent
 %       .filename           char
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;

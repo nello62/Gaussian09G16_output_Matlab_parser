@@ -16,6 +16,10 @@ function route = G16_route(filename, varargin)
 %
 %   Note: collects the lines between the two '------' separators that follow
 %         the first '#' line (i.e. the standard Gaussian route block).
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'filename', @ischar);

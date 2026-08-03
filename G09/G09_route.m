@@ -9,6 +9,10 @@ function route = G09_route(filename)
 %   Example:
 %       r = G09_route('indaco.log')
 %       % '# opt freq=raman b3lyp/6-311++g(d,p) nosymm geom=connectivity field=x+50'
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 if ~isfile(filename)
     error('G09_route: file not found: %s', filename);

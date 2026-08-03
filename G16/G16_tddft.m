@@ -32,6 +32,10 @@ function td = G16_tddft(filename, varargin)
 %
 %       % transitions of the 2nd state
 %       td.trans{2}   % [from, to, coeff]
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse input arguments

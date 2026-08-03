@@ -31,6 +31,10 @@ function sp = G09_spectra(filename, varargin)
 %       .Raman_cont  [Ngrid x 1]    Lorentzian-broadened Raman spectrum
 %       .FWHM        double
 %       .filename    char
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse arguments

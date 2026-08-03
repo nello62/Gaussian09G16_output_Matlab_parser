@@ -16,6 +16,10 @@ function [charge, mult] = G16_charge_mult(filename, varargin)
 %   Example:
 %       [q, m] = G16_charge_mult('V_E00t.out')
 %       % q = 0,  m = 1
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'filename', @ischar);

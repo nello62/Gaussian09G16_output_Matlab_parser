@@ -43,6 +43,10 @@ function outfile = G16_animate_mode(mol, nm, mode_idx, varargin)
 %       G16_animate_mode(mol, nm, 70, 'Scale', 2, 'FPS', 25);
 %
 %   See also G16_DRAW_MODE, G16_DRAW_MOLECULE, G16_MODEVIEWER.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse input arguments

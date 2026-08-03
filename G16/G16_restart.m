@@ -20,6 +20,10 @@ function gjf_file = G16_restart(filename, varargin)
 %       gjf_file    char    path of the generated .gjf file
 %
 %   See also G09_RESTART, G16_STRUCTURE, G_READ_INPUT.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'filename',    @ischar);

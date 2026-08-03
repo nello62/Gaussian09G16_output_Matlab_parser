@@ -8,6 +8,10 @@ function lines = G09_read_lines(filename)
 %     - latin-1 (ISO-8859-1) encoding
 %
 %   Returns a cell array of strings with line endings stripped.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 if ~isfile(filename)
     error('G09_read_lines: file not found: %s', filename);

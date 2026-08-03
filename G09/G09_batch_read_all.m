@@ -31,6 +31,10 @@ function T = G09_batch_read_all(folder, varargin)
 %       T(T.Gap_eV == min(T.Gap_eV), :)   % smallest HOMO-LUMO gap
 %
 %   See also G09_READ_ALL, G09_WRITE_REPORT, G09_ORBITAL_ENERGIES.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'folder',       @ischar);

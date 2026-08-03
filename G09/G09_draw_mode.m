@@ -27,6 +27,10 @@ function G09_draw_mode(mol, nm, mode_idx, varargin)
 %       nm  = G09_nmodes('V_E00t.out');
 %       G09_draw_mode(mol, nm, 91)                       % CC stretch a 1582 cm-1
 %       G09_draw_mode(mol, nm, 91, 'FlipSign', true)      % reversed arrows
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;

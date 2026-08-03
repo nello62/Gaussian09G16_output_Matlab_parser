@@ -38,6 +38,10 @@ function T = G16_read_all(filename)
 %     G09_draw_molecule(T.structure);
 %
 %   S.Trusso IPCF-CNR Messina 2026
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
     if ~isfile(filename)
         error('G16_read_all: file not found: %s', filename);

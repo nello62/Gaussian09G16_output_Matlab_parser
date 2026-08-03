@@ -32,6 +32,10 @@ function mol = G16_structure(filename, varargin)
 %     the geometry is the optimised one.
 %   - If Standard orientation is absent (e.g. NoSymm keyword), Input orientation is used.
 %   - step='last' (default) always takes the last geometry block in the file.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse input arguments

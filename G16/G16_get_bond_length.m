@@ -32,6 +32,10 @@ function bondTable = G16_get_bond_length(mol, varargin)
 %   non deriva dalla connettività/topologia calcolata da Gaussian: va
 %   quindi bene per un'analisi strutturale rapida, non per la matrice di
 %   connettività "ufficiale" dell'output G16/G16.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addParameter(p, 'Tolerance', 1.15, @(x) isnumeric(x) && isscalar(x) && x > 0);

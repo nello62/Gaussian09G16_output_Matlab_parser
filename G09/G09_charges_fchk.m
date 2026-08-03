@@ -57,6 +57,10 @@ function ch_out = G09_charges_fchk(mol, ch, varargin)
 %
 %       % Use as drop-in replacement for G09_charges:
 %       ch = G09_charges_fchk(data.mol, data.ch, 'ColorScale', 'none');
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % Parse arguments

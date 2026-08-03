@@ -18,6 +18,10 @@ function ok = G09_check_gaussian_match(lines, filename)
 %                unknown), false if a mismatch warning was issued.
 %
 %   See also G09_GAUSSIAN_VERSION, G16_CHECK_GAUSSIAN_MATCH.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 ok = true;
 nscan = min(numel(lines), 60);

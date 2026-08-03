@@ -20,6 +20,10 @@ function T = G09_read_all(filename)
 %       T = G09_read_all('indaco.log');
 %       disp(T.energy)
 %       G09_draw_molecule(T.structure);
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 lines = G09_read_lines(filename);
 

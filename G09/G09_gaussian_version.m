@@ -27,6 +27,10 @@ function gv = G09_gaussian_version(filename)
 %   Example:
 %       gv = G09_gaussian_version('a1.out');       % gv.major = 16, gv.revision = 'C.01'
 %       gv = G09_gaussian_version('molecule.fchk'); % falls back to molecule.out/.log if present
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 if ~isfile(filename)
     error('G09_gaussian_version: file not found: %s', filename);

@@ -36,6 +36,10 @@ function hp = G16_hyperpolar(filename, varargin)
 %       hp.beta0.beta_vec          % modulo beta statico in au
 %       hp.beta_dyn(1).lambda_nm   % wavelength of the first dynamic entry (nm)
 %       hp.beta_dyn(1).beta_vec    % |beta| a quella frequenza
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;

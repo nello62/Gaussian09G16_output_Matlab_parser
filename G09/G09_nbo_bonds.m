@@ -47,6 +47,10 @@ function bt = G09_nbo_bonds(filename, varargin)
 %       bt = G09_nbo_bonds('CH4_NBO.LOG');
 %
 %   See also G09_GET_BOND_LENGTH, G09_DRAW_MOLECULE.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 p = inputParser;
 addRequired(p,  'filename', @ischar);

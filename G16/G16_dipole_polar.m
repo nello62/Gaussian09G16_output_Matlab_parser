@@ -50,6 +50,10 @@ function dp = G16_dipole_polar(filename, varargin)
 %       dp.mu_tot          % modulo dipolo in Debye
 %       dp.alpha_iso       % polarizzabilita' isotropica in au
 %       dp.alpha_tensor    % full [3x3] polarisability tensor in au
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;

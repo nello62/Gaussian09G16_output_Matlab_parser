@@ -35,6 +35,10 @@ function G16_draw_orbital(oe, varargin)
 %       G16_draw_orbital(oe, 'NLevels', 8, 'Units', 'Hartree')
 %
 %   See also G16_ORBITAL_ENERGIES.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;

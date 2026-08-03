@@ -32,6 +32,10 @@ function G16_modeViewer(filename, varargin)
 %       G16_modeViewer('V_E00t.out');
 %
 %   See also G16_STRUCTURE, G16_NMODES, G16_DRAW_MODE.
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 % ---- load structure and normal modes -----------------------------------

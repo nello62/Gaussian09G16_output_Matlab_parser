@@ -37,6 +37,10 @@ function oe = G16_orbital_energies(filename, varargin)
 %   Example:
 %       oe = G16_orbital_energies('V_E00t.out');
 %       fprintf('HOMO-LUMO gap = %.3f eV\n', oe.gap_eV);
+%
+%   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
+%   Email: sebastiano.trusso@cnr.it
+%   Developed with the assistance of an AI coding tool (Claude, Anthropic), under the author's supervision and review.
 
 % -------------------------------------------------------------------------
 p = inputParser;
