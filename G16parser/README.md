@@ -90,6 +90,8 @@ main [README](../README.md).
 | `g16_route` | Route section string |
 | `g16_get_bond_length` | Bond-length table (pandas DataFrame) from covalent radii |
 | `g16_nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
+| `g16_fchk_read` | Reads a Gaussian formatted checkpoint (`.fchk`) file — works on both G09 and G16 `.fchk` files, since the format does not depend on the Gaussian version |
+| `g16_charges_fchk` | Visualises charges from a `g16_fchk_read` struct, without needing the corresponding `.log`/`.out` file |
 | `g16_gaussian_version` | Detects the Gaussian version/revision (works on `.fchk` via a sibling `.log`/`.out`) |
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
@@ -155,6 +157,21 @@ g16.g16_charges('molecule_nbo.out', bond_list=bond_list, show_dipole=True)
   optional group. This Python port's `re`-based parser never had the bug
   (Python's `re` handles trailing optional groups correctly) and has always
   extracted `S2` correctly.
+- A bug discovered in the original `G09_fchk_read.m`/`G16_fchk_read.m`
+  (fixed 2026-08-03): the IR/Raman intensity calculation re-reshaped the
+  already-correctly-shaped dipole/polarisability derivative matrices a
+  second time (`reshape(dip_deriv, N3, 3)'`) before use — since MATLAB's
+  `reshape` reinterprets the same column-major buffer under the new shape
+  rather than transposing back to the original layout, this silently
+  scrambled which derivative value belonged to which atom/displacement,
+  producing plausible-looking but wrong `nm.IR`/`nm.Raman` values. Caught
+  by comparing a `.fchk`-derived spectrum against the same molecule's
+  IR/Raman as printed directly by Gaussian in the corresponding `.out`
+  file. Fixed in both MATLAB files by using the matrices directly (no
+  second reshape needed). This Python port's `g16_fchk_read` never had
+  the bug (written directly with the correct indexing) — verified to
+  match the `.out`-printed values, and a regression test now guards
+  against it ever being reintroduced.
 - `g16_mode_viewer` is a Tkinter rewrite of `G16_modeViewer.m`'s `uifigure`
   GUI (same controls: mode selector, order-by, per-option redraw, title,
   save-as PDF/EPS/JPEG). One simplification: "target figure" always means

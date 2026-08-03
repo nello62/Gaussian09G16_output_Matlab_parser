@@ -24,9 +24,16 @@ def sample_out():
 
     Skips (rather than fails) any test that depends on it if no such file
     is present yet, so the suite stays runnable while a fixture file is
-    being sourced.
+    being sourced. Excludes files earmarked for a more specific fixture:
+    filenames containing "nbo" (case-insensitive, backs sample_nbo_out),
+    and any file with a same-stem ".fchk" sibling (backs sample_fchk_pair,
+    e.g. tests/fixtures/4-NTP.out/.fchk) -- this fixture backs tests that
+    assume a "plain" file (e.g. asserting g16_nbo_bonds raises on a file
+    with no NBO section), so it must not resolve to one of those instead.
     """
     candidates = sorted(FIXTURES_DIR.glob("*.out")) + sorted(FIXTURES_DIR.glob("*.log"))
+    candidates = [c for c in candidates
+                  if "nbo" not in c.name.lower() and not c.with_suffix(".fchk").exists()]
     if not candidates:
         pytest.skip("No Gaussian 16 sample .out/.log file in tests/fixtures/ yet")
     return str(candidates[0])
@@ -45,6 +52,41 @@ def sample_nbo_out():
     if not candidates:
         pytest.skip("No NBO-analysis sample file in tests/fixtures/ yet")
     return str(candidates[0])
+
+
+@pytest.fixture(scope="session")
+def sample_fchk():
+    """Path to a real Gaussian formatted checkpoint (.fchk) file dropped
+    in tests/fixtures/, used by g16_fchk_read/g16_charges_fchk tests.
+
+    Skips (rather than fails) any test that depends on it if no such
+    file is present yet.
+    """
+    candidates = sorted(FIXTURES_DIR.glob("*.fchk"))
+    if not candidates:
+        pytest.skip("No .fchk sample file in tests/fixtures/ yet")
+    return str(candidates[0])
+
+
+@pytest.fixture(scope="session")
+def sample_fchk_pair():
+    """Path pair (fchk, out) for the SAME Gaussian job -- i.e. a
+    '<stem>.fchk' with a same-stem '<stem>.out'/'<stem>.log' sibling in
+    tests/fixtures/. Used to cross-validate g16_fchk_read's IR/Raman
+    intensities (derived from the .fchk dipole/polarisability
+    derivatives) against the IR/Raman Gaussian itself prints directly in
+    the .out file for g16_nmodes -- these must agree, since both describe
+    the same physical quantity for the same calculation.
+
+    Skips (rather than fails) any test that depends on it if no matching
+    pair is present yet.
+    """
+    for fchk in sorted(FIXTURES_DIR.glob("*.fchk")):
+        for ext in (".out", ".log"):
+            candidate = fchk.with_suffix(ext)
+            if candidate.exists():
+                return str(fchk), str(candidate)
+    pytest.skip("No matching .fchk/.out(.log) pair in tests/fixtures/ yet")
 
 
 @pytest.fixture(scope="session")

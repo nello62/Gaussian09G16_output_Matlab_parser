@@ -25,3 +25,17 @@ opt+freq+polar job on CH4) used by `test_nbo_bonds.py` via the
 actual NBO analysis (`pop=nbo`) section, needed to test
 `g16_nbo_bonds`; `test.out` deliberately has no NBO data, which is used
 to test `g16_nbo_bonds`'s "no NBO analysis found" error path.
+
+`4-NTP.fchk` + `4-NTP.out` are a real, same-molecule pair (opt+freq
+B3LYP/6-311G(d,p) on 4-nitrothiophenol, 15 atoms) used by
+`test_fchk_read.py` via the `sample_fchk` and `sample_fchk_pair` fixtures
+in `conftest.py`. The pair exists specifically to cross-validate
+`g16_fchk_read`'s IR/Raman intensities (derived from the `.fchk`
+dipole/polarisability derivatives) against the IR/Raman Gaussian itself
+prints directly in the `.out` file — this caught a real bug (a data-
+scrambling double `reshape` in the MATLAB `G09_fchk_read.m`/
+`G16_fchk_read.m`, fixed 2026-08-03; see the toolbox manual's "Notes on
+the port" for details) that produced plausible-looking but wrong
+IR/Raman values. `sample_out` (used by tests that assume a "plain" file)
+explicitly excludes any `.out` with a same-stem `.fchk` sibling, so it
+never resolves to `4-NTP.out`.

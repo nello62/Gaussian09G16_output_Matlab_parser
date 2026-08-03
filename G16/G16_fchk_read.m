@@ -1,19 +1,22 @@
-function data = G09_fchk_read(filename, varargin)
-% G09_FCHK_READ  Reads a Gaussian 09/16 formatted checkpoint file (.fchk).
+function data = G16_fchk_read(filename, varargin)
+% G16_FCHK_READ  Reads a Gaussian 09/16 formatted checkpoint file (.fchk).
 %
-%   data = G09_FCHK_READ(filename)
-%   data = G09_FCHK_READ(filename, 'verbose', false)
+%   data = G16_FCHK_READ(filename)
+%   data = G16_FCHK_READ(filename, 'verbose', false)
 %
 %   The .fchk file is the ASCII-formatted version of the binary .chk file,
 %   generated with the Gaussian utility:
 %       formchk  jobname.chk  jobname.fchk
 %
-%   DIFFERENCE FROM g09_fckread.m (old .fck reader):
+%   Notes:
 %     - Reads the standard .fchk format (not the obsolete .fck / newzmat format)
 %     - Uses a single generic parser for all sections (no hard-coded line counts)
 %     - Returns SI-ready fields: XYZ in Angstrom, dipole in Debye
 %     - No external helper functions required (self-contained)
-%     - Compatible with both G09 and G16 .fchk files
+%     - Despite the G16_ prefix, this also works on G09 .fchk files, since
+%       the formatted-checkpoint layout does not depend on the Gaussian
+%       version (an identical G09_fchk_read is also provided in G09/, so
+%       either toolbox folder alone is enough to read any .fchk file)
 %
 %   Optional parameters (Name-Value):
 %       'verbose'  - true (default) | false  — print progress messages
@@ -96,23 +99,23 @@ function data = G09_fchk_read(filename, varargin)
 %   Also returns three compatibility sub-structs, so results can be fed
 %   straight into the corresponding visualisation functions without any
 %   manual conversion:
-%       .mol   char   compatible with G09_draw_molecule(data.mol)
-%       .ch    char   compatible with G09_charges_fchk(data.mol, data.ch)
-%                     -- NOT G09_charges, which only accepts a
+%       .mol   char   compatible with G16_draw_molecule(data.mol)
+%       .ch    char   compatible with G16_charges_fchk(data.mol, data.ch)
+%                     -- NOT G16_charges, which only accepts a
 %                     .log/.out filename, not a pre-parsed struct
-%       .nm    char   compatible with G09_draw_mode(data.mol, data.nm, mode_idx)
+%       .nm    char   compatible with G16_draw_mode(data.mol, data.nm, mode_idx)
 %
 %   Example:
-%       data = G09_fchk_read('3typ.fchk');
+%       data = G16_fchk_read('3typ.fchk');
 %       data.gap_eV                     % HOMO-LUMO gap in eV
 %       data.dipole_D                   % dipole vector in Debye
 %       data.polar_iso                  % isotropic polarisability in au
 %       data.force_const(1:6,1:6)       % top-left of force constant matrix
 %       data.mulliken_charges           % Mulliken charges
-%       G09_draw_molecule(data.mol);
-%       G09_charges_fchk(data.mol, data.ch);
+%       G16_draw_molecule(data.mol);
+%       G16_charges_fchk(data.mol, data.ch);
 %
-%   See also G09_CHARGES_FCHK, G09_DRAW_MOLECULE, G09_DRAW_MODE.
+%   See also G16_CHARGES_FCHK, G16_DRAW_MOLECULE, G16_DRAW_MODE.
 %
 %   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
 %   Email: sebastiano.trusso@cnr.it
@@ -128,7 +131,7 @@ parse(p, filename, varargin{:});
 verbose = p.Results.verbose;
 
 if ~isfile(filename)
-    error('G09_fchk_read: file not found: %s', filename);
+    error('G16_fchk_read: file not found: %s', filename);
 end
 
 % -------------------------------------------------------------------------
@@ -278,7 +281,7 @@ virial       = read_sec('Virial Ratio');
 rms_force    = read_sec('RMS Force');
 
 if verbose
-    fprintf('\n── G09_fchk_read: %s ──\n', filename);
+    fprintf('\n── G16_fchk_read: %s ──\n', filename);
     fprintf('  Title  : %s\n', title_line);
     fprintf('  Method : %s  Basis: %s\n', method, basis);
     fprintf('  Nat=%d  Charge=%+d  Mult=%d  Nbasis=%d\n', Nat, charge, mult, Nbasis);
@@ -293,7 +296,7 @@ masses   = read_sec('Real atomic weights');
 xyz_bohr = read_sec('Current cartesian coordinates');
 
 if numel(AN_vec) ~= Nat
-    warning('G09_fchk_read: Atomic numbers count mismatch.');
+    warning('G16_fchk_read: Atomic numbers count mismatch.');
 end
 
 % Convert Bohr -> Angstrom (CODATA 2022 Bohr radius)
@@ -455,7 +458,7 @@ end
 % flag it explicitly via has_dynamic_beta and a warning.
 has_dynamic_beta = any(~cellfun(@isempty, regexpi(sec_names, '^Beta\(.*\)$')));
 if has_dynamic_beta && isnan(beta_vec)
-    warning('G09_fchk_read:dynamicBetaNotParsed', ...
+    warning('G16_fchk_read:dynamicBetaNotParsed', ...
         ['%s contains a frequency-dependent hyperpolarisability section ' ...
          '(dynamic Beta, e.g. from CPHF=RdFreq) that this parser does not ' ...
          'yet decode -- beta_au/beta_vec are NaN even though ' ...
@@ -546,11 +549,11 @@ data.polar_deriv  = pol_deriv;
 data.filename     = filename;
 
 % -------------------------------------------------------------------------
-% Build compatibility sub-structs for G09_draw_molecule, G09_charges_fchk,
-% G09_draw_mode
+% Build compatibility sub-structs for G16_draw_molecule, G16_charges_fchk,
+% G16_draw_mode
 % -------------------------------------------------------------------------
 
-% ── mol  (compatible with G09_draw_molecule, G09_draw_mode) ──────────────
+% ── mol  (compatible with G16_draw_molecule, G16_draw_mode) ──────────────
 mol.symbols     = symbols;
 mol.xyz         = xyz_ang;
 mol.Z           = AN_vec;
@@ -561,12 +564,12 @@ mol.orientation = 'fchk (Input orientation)';
 mol.filename    = filename;
 data.mol        = mol;
 
-% ── ch  (compatible with G09_charges_fchk, NOT G09_charges -- that one
+% ── ch  (compatible with G16_charges_fchk, NOT G16_charges -- that one
 %        only accepts a .log/.out filename, not a pre-parsed struct) ────
 % Mulliken charges are always in the .fchk file
 ch.symbols   = symbols;
 ch.charges   = mull_chg;
-ch.charges_H = [];          % H-summed not in fchk — use G09_charges on .log instead
+ch.charges_H = [];          % H-summed not in fchk — use G16_charges on .log instead
 ch.sum_q     = sum(mull_chg);
 ch.type      = 'Mulliken';
 ch.label     = 'Mulliken Charges (from .fchk)';
@@ -574,7 +577,7 @@ ch.Natoms    = Nat;
 ch.filename  = filename;
 data.ch      = ch;
 
-% ── nm  (compatible with G09_draw_mode) ───────────────────────────────────
+% ── nm  (compatible with G16_draw_mode) ───────────────────────────────────
 % Compute normal modes from the mass-weighted Cartesian force constant matrix.
 % The .fchk force_const is in Hartree/Bohr^2.
 %
@@ -664,7 +667,7 @@ if ~any(isnan(force_const(:))) && numel(masses) == Nat
     % guarantee a fixed convention). A mode and its sign-flipped counterpart
     % represent the SAME physical vibration (180° phase difference), but
     % may appear reversed compared to Gaussian's own .out file or GaussView.
-    % Use G09_draw_mode(..., 'FlipSign', true) to invert arrows for a
+    % Use G16_draw_mode(..., 'FlipSign', true) to invert arrows for a
     % specific mode if it appears antiparallel to GaussView's rendering.
 
     % ── Cartesian displacement vectors ───────────────────────────────────
@@ -738,7 +741,7 @@ if ~any(isnan(force_const(:))) && numel(masses) == Nat
         has_Raman = true;
     end
 
-    % Fill nm struct — same fields as G09_nmodes output
+    % Fill nm struct — same fields as G16_nmodes output
     nm.Nmodes    = Nmodes_vib;
     nm.Natoms    = Nat;
     nm.has_Raman = has_Raman;
@@ -771,10 +774,10 @@ data.nm = nm;
 
 if verbose
     fprintf('\n  Compatibility sub-structs ready:\n');
-    fprintf('    data.mol  → G09_draw_molecule(data.mol)\n');
-    fprintf('    data.ch   → G09_charges_fchk(data.mol, data.ch)\n');
-    fprintf('    data.nm   → G09_draw_mode(data.mol, data.nm, mode_idx)\n');
+    fprintf('    data.mol  → G16_draw_molecule(data.mol)\n');
+    fprintf('    data.ch   → G16_charges_fchk(data.mol, data.ch)\n');
+    fprintf('    data.nm   → G16_draw_mode(data.mol, data.nm, mode_idx)\n');
     fprintf('  Done.\n\n');
 end
 
-end  % G09_fchk_read
+end  % G16_fchk_read
