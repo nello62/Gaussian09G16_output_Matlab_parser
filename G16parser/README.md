@@ -85,6 +85,7 @@ main [README](../README.md).
 | `g16_dipole_polar` | Dipole moment and (static/dynamic) polarisability |
 | `g16_nmodes` | Vibrational normal-mode displacement vectors |
 | `g16_spectra` | IR/Raman spectra (stick + Lorentzian-broadened continuum) |
+| `g16_spectra_nm` | Same Lorentzian-broadened IR/Raman spectra as `g16_spectra`, built directly from an already-parsed `nm` struct (from `g16_nmodes`, or the `.nm` field of `g16_fchk_read`) — no `.log`/`.out` file needed |
 | `g16_orbital_energies` | HOMO/LUMO and the full occupied/virtual MO spectrum |
 | `g16_charge_mult` | Molecular charge and spin multiplicity |
 | `g16_route` | Route section string |

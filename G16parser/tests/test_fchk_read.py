@@ -70,3 +70,64 @@ def test_fchk_ir_raman_matches_out_ground_truth(sample_fchk_pair):
     np.testing.assert_allclose(data.nm.IR, nm_out.IR, rtol=0.01, atol=0.01)
     if nm_out.has_Raman and data.nm.has_Raman:
         np.testing.assert_allclose(data.nm.Raman, nm_out.Raman, rtol=0.01, atol=0.01)
+
+
+def test_spectra_nm_matches_spectra_ground_truth(sample_fchk_pair):
+    # g16_spectra_nm builds the same Lorentzian-broadened continuum as
+    # g16_spectra, but from an already-parsed nm struct (e.g. data.nm from
+    # g16_fchk_read) instead of re-reading a .log/.out file. Cross-check
+    # against g16_spectra called directly on the matching .out file.
+    fchk_path, out_path = sample_fchk_pair
+
+    sp_ref = g16.g16_spectra(out_path, FWHM=12, xmin=0, xmax=4000, dx=2)
+
+    data = g16.g16_fchk_read(fchk_path, verbose=False)
+    sp_nm = g16.g16_spectra_nm(data.nm, FWHM=12, xmin=0, xmax=4000, dx=2)
+
+    assert sp_ref.Nmodes == sp_nm.Nmodes
+    assert sp_nm.has_Raman == sp_ref.has_Raman
+    np.testing.assert_array_equal(sp_ref.x, sp_nm.x)
+    np.testing.assert_allclose(sp_ref.IR_cont, sp_nm.IR_cont, rtol=0.01, atol=0.01)
+    if sp_ref.has_Raman:
+        np.testing.assert_allclose(sp_ref.Raman_cont, sp_nm.Raman_cont, rtol=0.01, atol=0.01)
+
+    # Also works directly with g16_nmodes's output (not just fchk_read)
+    nm2 = g16.g16_nmodes(out_path)
+    sp_nm2 = g16.g16_spectra_nm(nm2, FWHM=12, xmin=0, xmax=4000, dx=2)
+    np.testing.assert_allclose(sp_ref.IR_cont, sp_nm2.IR_cont, atol=1e-9)
+
+
+def test_spectra_nm_normalize(sample_fchk):
+    data = g16.g16_fchk_read(sample_fchk, verbose=False)
+    sp = g16.g16_spectra_nm(data.nm, normalize=True)
+    assert abs(sp.IR_cont.max() - 1) < 1e-9
+    if sp.has_Raman:
+        assert abs(sp.Raman_cont.max() - 1) < 1e-9
+
+
+def test_spectra_nm_missing_field_raises():
+    from G16parser._common import Struct
+    try:
+        g16.g16_spectra_nm(Struct(foo=1))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_spectra_nm_zero_modes_raises():
+    from G16parser._common import Struct
+    try:
+        g16.g16_spectra_nm(Struct(freq=np.array([]), IR=np.array([]), Nmodes=0))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_spectra_nm_no_raman():
+    from G16parser._common import Struct
+    nm = Struct(freq=np.array([100.0, 200.0]), IR=np.array([1.0, 2.0]),
+                Nmodes=2, filename="test.out")
+    sp = g16.g16_spectra_nm(nm)
+    assert sp.has_Raman is False
+    assert len(sp.Raman) == 0
+    assert len(sp.Raman_cont) == 0

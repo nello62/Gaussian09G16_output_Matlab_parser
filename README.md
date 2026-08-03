@@ -83,6 +83,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `batch_read_all` | Runs `read_all` (+ `orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary table; per-file failures are recorded, not fatal |
 | `fchk_read` | Reads a Gaussian formatted checkpoint (`.fchk`) file — works on both G09 and G16 `.fchk` files regardless of which toolbox folder is used, since the format does not depend on the Gaussian version |
 | `charges_fchk` | Visualises charges from a `fchk_read` struct |
+| `G_spectra_nm` *(shared, no G09_/G16_ prefix)* | Builds Lorentzian-broadened IR/Raman spectra directly from an `nm` struct (from `nmodes`, or the `.nm` field of `fchk_read`) — same parameters/output as `spectra`, without needing the source `.log`/`.out` file |
 | `restart` | Generates a `.gjf` restart input file from an existing output file |
 | `hyperpolar` *(G16 only)* | Dipole hyperpolarisability (Beta) |
 | `tddft` *(G16 only)* | TD-DFT excited states |
