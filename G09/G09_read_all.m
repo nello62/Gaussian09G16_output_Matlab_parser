@@ -13,8 +13,13 @@ function T = G09_read_all(filename)
 %       .energy     - SCF energy and thermochemistry (see G09_energy)
 %       .structure  - molecular geometry (see G09_structure)
 %       .dipolar    - dipole moment and polarisability (see G09_dipole_polar)
-%       .nmodes     - vibrational normal modes (see G09_nmodes)
-%       .spectra    - IR/Raman spectra (see G09_spectra)
+%       .nmodes     - vibrational normal modes (see G09_nmodes); field
+%                     entirely omitted, with a non-blocking warning, if
+%                     the file has no frequency calculation (e.g. a
+%                     TD-DFT-only single point job with no 'freq'
+%                     keyword) -- check with isfield(T, 'nmodes')
+%       .spectra    - IR/Raman spectra (see G09_spectra); omitted under
+%                     the same condition as .nmodes above
 %
 %   Example:
 %       T = G09_read_all('indaco.log');
@@ -31,7 +36,27 @@ T.charge    = G09_charges(filename, 'plot', false, 'Lines', lines);
 T.energy    = G09_energy(filename, 'Lines', lines);
 T.structure = G09_structure(filename, 'Lines', lines);
 T.dipolar   = G09_dipole_polar(filename, 'Lines', lines);
-T.nmodes    = G09_nmodes(filename, 'Lines', lines);
-T.spectra   = G09_spectra(filename, 'Lines', lines);
+
+% IR and Raman vibrational modes, if present (requires 'freq' in the
+% route section, e.g. absent for a TD-DFT-only single point job) --
+% caught here rather than left to crash the whole call, since
+% G09_write_report already expects T.nmodes to be optional (isfield check)
+try
+    T.nmodes = G09_nmodes(filename, 'Lines', lines);
+catch ME
+    warning('G09_read_all:noNmodes', ...
+        'No vibrational normal modes found in %s (%s); T.nmodes omitted.', ...
+        filename, ME.message);
+end
+
+% Frequency, IR and Raman intensities, IR and Raman spectra -- same
+% optional-section handling as T.nmodes above
+try
+    T.spectra = G09_spectra(filename, 'Lines', lines);
+catch ME
+    warning('G09_read_all:noSpectra', ...
+        'No IR/Raman spectra found in %s (%s); T.spectra omitted.', ...
+        filename, ME.message);
+end
 
 end % G09_read_all

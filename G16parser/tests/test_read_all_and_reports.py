@@ -1,5 +1,6 @@
 import os
 import shutil
+import warnings
 
 import G16parser as g16
 
@@ -11,6 +12,44 @@ def test_read_all_basic(sample_out):
     assert T.dipolar.mu_tot >= 0
     assert T.route.strip().startswith("#")
     assert T.chargemol.mol >= 1
+
+
+def test_read_all_no_freq_section_does_not_crash(tmp_path, sample_out):
+    # Regression test: a Gaussian job with no 'freq' keyword (e.g. a
+    # TD-DFT-only single point job) has no "normal coordinates"/"Harmonic
+    # frequencies" section at all, so g16_nmodes/g16_spectra genuinely
+    # raise ValueError -- g16_read_all used to let that exception
+    # propagate and crash the whole call, even though every other field
+    # (charges, energy, structure, dipole, route, charge/mult) would have
+    # extracted fine. Simulates a no-freq file by breaking the two
+    # section headers in a real fixture, rather than requiring a second
+    # large real .out fixture.
+    with open(sample_out, "r", encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    content = content.replace("and normal coordinates:", "and NORMAL_COORDS_REMOVED:")
+    content = content.replace("Harmonic frequencies", "HARMONIC_FREQ_REMOVED")
+
+    no_freq_out = tmp_path / "no_freq.out"
+    no_freq_out.write_text(content, encoding="utf-8")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        T = g16.g16_read_all(str(no_freq_out))
+        messages = [str(w.message) for w in caught]
+
+    assert T.nmodes is None
+    assert T.spectra is None
+    assert T.charge is not None
+    assert T.energy is not None
+    assert T.structure.Natoms > 0
+    assert T.dipolar is not None
+    assert T.route.strip().startswith("#")
+    assert any("nmodes omitted" in m for m in messages)
+    assert any("spectra omitted" in m for m in messages)
+
+    # g16_write_report must also handle the missing fields gracefully
+    report_path = g16.g16_write_report(T, str(tmp_path / "no_freq_report.txt"))
+    assert os.path.isfile(report_path)
 
 
 def test_write_report(tmp_path, sample_out):

@@ -21,11 +21,16 @@ function T = G16_read_all(filename)
 %                           (see G16_structure)
 %       .dipolar         - dipole moment and polarizability data
 %                           (see G16_dipole_polar)
-%       .nmodes          - IR/Raman vibrational normal modes, if present
-%                           (see G16_nmodes)
+%       .nmodes          - IR/Raman vibrational normal modes (see
+%                           G16_nmodes); field entirely omitted, with a
+%                           non-blocking warning, if the file has no
+%                           frequency calculation (e.g. a TD-DFT-only
+%                           single point job with no 'freq' keyword) --
+%                           check with isfield(T, 'nmodes')
 %       .spectra         - frequencies, IR/Raman intensities, and
 %                           simulated IR/Raman spectra (10 cm^-1 FWHM)
-%                           (see G16_spectra)
+%                           (see G16_spectra); omitted under the same
+%                           condition as .nmodes above
 %       .route           - Gaussian route section details
 %                           (see G16_route)
 %       .chargemol.charge - total molecular charge
@@ -64,11 +69,27 @@ function T = G16_read_all(filename)
     % Dipole and polarizability data
     T.dipolar = G16_dipole_polar(filename, 'Lines', lines);
 
-    % IR and Raman vibrational modes, if present (freq=Raman)
-    T.nmodes = G16_nmodes(filename, 'Lines', lines);
+    % IR and Raman vibrational modes, if present (requires 'freq' in the
+    % route section, e.g. absent for a TD-DFT-only single point job) --
+    % caught here rather than left to crash the whole call, since
+    % G16_write_report already expects T.nmodes to be optional (isfield check)
+    try
+        T.nmodes = G16_nmodes(filename, 'Lines', lines);
+    catch ME
+        warning('G16_read_all:noNmodes', ...
+            'No vibrational normal modes found in %s (%s); T.nmodes omitted.', ...
+            filename, ME.message);
+    end
 
     % Frequency, IR and Raman intensities, IR and Raman spectra (10 cm^-1 FWHM)
-    T.spectra = G16_spectra(filename, 'Lines', lines);
+    % -- same optional-section handling as T.nmodes above
+    try
+        T.spectra = G16_spectra(filename, 'Lines', lines);
+    catch ME
+        warning('G16_read_all:noSpectra', ...
+            'No IR/Raman spectra found in %s (%s); T.spectra omitted.', ...
+            filename, ME.message);
+    end
 
     % Info on Gaussian route
     T.route = G16_route(filename, 'Lines', lines);
