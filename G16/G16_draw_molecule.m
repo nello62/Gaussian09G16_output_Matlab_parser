@@ -47,6 +47,13 @@ function G16_draw_molecule(mol, varargin)
 %   inconsistent single/double rendering across chemically-equivalent
 %   ring bonds.
 %
+%   The plot supports interactive rotation (drag with the mouse); the
+%   two lights are kept tracking the camera after every such rotation,
+%   so the CPK spheres keep their 3-D shading gradient at any viewing
+%   angle instead of going flat/uniformly lit after a large rotation
+%   (e.g. 180 degrees), which is what happens if a light created with
+%   CAMLIGHT is never repositioned after the camera moves.
+%
 %   Example:
 %       mol = G16_structure('zeatin.out');
 %       G16_draw_molecule(mol)
@@ -153,8 +160,8 @@ set(ax, 'Color', bg_color);
 view(ax, 3);
 lighting(ax, 'gouraud');
 material(ax, 'dull');
-camlight(ax, 'headlight');
-camlight(ax, 45, 30);
+light1 = camlight(ax, 'headlight');
+light2 = camlight(ax, 45, 30);
 
 % -------------------------------------------------------------------------
 % Draw bonds
@@ -283,8 +290,24 @@ if show_axes
     draw_cartesian_axes(ax, corner, axes_length);
 end
 
-% Enable interactive rotation
-rotate3d(ax, 'on');
+% Enable interactive rotation, and keep both lights tracking the camera
+% after every interactive rotation. CAMLIGHT only positions a light
+% relative to the camera at the moment it is called ("In order for a
+% light created with CAMLIGHT to stay in a constant position relative
+% to the camera, CAMLIGHT must be called whenever the camera is moved"
+% -- MATLAB doc); ROTATE3D does not do this on its own, so without this
+% callback the lights stay fixed in the axes' 3-D world frame while the
+% molecule rotates underneath them. After a large enough rotation (e.g.
+% 180 degrees) the CPK spheres end up lit from behind instead of from
+% the viewer's side, losing the shading gradient that gives them their
+% 3-D appearance and making them look flat/uniformly lit.
+% ActionPostCallback is a property (assigning it again simply replaces
+% the previous callback), not an event -- rotate3d's mode-manager object
+% is shared per figure, so repeated calls into the same figure (e.g. one
+% G16_draw_molecule call per animation frame) do not accumulate listeners.
+h_rot = rotate3d(ax);
+h_rot.Enable = 'on';
+h_rot.ActionPostCallback = @(~, ~) local_relight(light1, light2);
 
 % Adjust perspective
 camproj(ax, 'perspective');
@@ -295,6 +318,13 @@ end % function G16_draw_molecule
 % =========================================================================
 %  Local functions
 % =========================================================================
+
+function local_relight(light1, light2)
+% Reposition both lights to match the camera's current position after
+% an interactive rotation (see comment above the ActionPostCallback).
+camlight(light1, 'headlight');
+camlight(light2, 45, 30);
+end
 
 function clr = get_color_local(sym, cpk_colors, default_color)
     if isKey(cpk_colors, sym)
