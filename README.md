@@ -76,6 +76,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `convergence` | Geometry-optimisation convergence criteria per step |
 | `charge_mult` | Molecular charge and spin multiplicity |
 | `route` | Route section string |
+| `available_data` | Lists which toolbox quantities are expected to be extractable from a file, by checking its route keywords (e.g. "no `freq` keyword → no nmodes/spectra/thermochemistry") — catches this before you hit an error or a NaN |
 | `get_bond_length` | Bond-length table from covalent radii |
 | `nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
 | `gaussian_version` | Detects the Gaussian version/revision that produced the file (works on `.fchk` via a sibling `.log`/`.out`) |

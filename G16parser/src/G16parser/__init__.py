@@ -12,6 +12,7 @@ from ._common import Struct
 from .gaussian_version import g16_gaussian_version
 from .charge_mult import g16_charge_mult
 from .route import g16_route
+from .available_data import g16_available_data
 from .structure import g16_structure
 from .read_input import g16_read_input
 from .energy import g16_energy
@@ -41,7 +42,7 @@ from .write_report import g16_write_report
 
 __all__ = [
     "Struct",
-    "g16_gaussian_version", "g16_charge_mult", "g16_route",
+    "g16_gaussian_version", "g16_charge_mult", "g16_route", "g16_available_data",
     "g16_structure", "g16_read_input", "g16_energy", "g16_convergence", "g16_dipole_polar",
     "g16_charges", "g16_nmodes", "g16_spectra", "g16_spectra_nm", "g16_orbital_energies",
     "g16_get_bond_length", "g16_nbo_bonds", "g16_fchk_read", "g16_charges_fchk",

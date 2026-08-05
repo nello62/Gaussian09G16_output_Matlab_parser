@@ -89,6 +89,7 @@ main [README](../README.md).
 | `g16_orbital_energies` | HOMO/LUMO and the full occupied/virtual MO spectrum |
 | `g16_charge_mult` | Molecular charge and spin multiplicity |
 | `g16_route` | Route section string |
+| `g16_available_data` | Lists which toolbox quantities are expected to be extractable from a file, by checking its route keywords (e.g. "no `freq` keyword → no nmodes/spectra/thermochemistry") — catches this before you hit an error or a NaN |
 | `g16_get_bond_length` | Bond-length table (pandas DataFrame) from covalent radii |
 | `g16_nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
 | `g16_fchk_read` | Reads a Gaussian formatted checkpoint (`.fchk`) file — works on both G09 and G16 `.fchk` files, since the format does not depend on the Gaussian version |
