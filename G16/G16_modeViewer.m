@@ -39,6 +39,12 @@ function G16_modeViewer(filename, varargin)
 
 % -------------------------------------------------------------------------
 % ---- load structure and normal modes -----------------------------------
+if ~(ischar(filename) || (isstring(filename) && isscalar(filename)))
+    error('G16_modeViewer:invalidInput', ...
+        ['G16_modeViewer expects a Gaussian output FILENAME (char/string), not a ', ...
+         'mol/nm struct -- it reads both the structure and the normal modes from ', ...
+         'the file itself. Usage: G16_modeViewer(''molecule.out'')']);
+end
 fprintf('G16_modeViewer: reading structure and normal modes from %s ...\n', filename);
 mol = G16_structure(filename);
 nm  = G16_nmodes(filename);
@@ -51,21 +57,8 @@ end
 currentModeFig = gobjects(0);   % handle of the most recently drawn mode figure
 openModeFigs   = gobjects(0);   % all mode figures opened by this viewer
 
-% ---- screen geometry, so mode figures can be opened as large as possible -
-% NOTE: get(groot,'ScreenSize') returns the bounding box of ALL monitors
-% combined on multi-display systems (a well-known MATLAB gotcha), which can
-% place windows in a region not covered by any single physical screen.
-% MonitorPositions gives one row per real monitor; row 1 is normally the
-% primary display, but we explicitly pick the one that contains the origin
-% (1,1) to be safe regardless of monitor order/arrangement.
-mp  = get(groot, 'MonitorPositions');       % [Nmonitors x 4], each row [left bottom width height]
-priIdx = find(mp(:,1) <= 1 & mp(:,2) <= 1, 1);
-if isempty(priIdx), priIdx = 1; end
-scr = mp(priIdx, :);                        % [left bottom width height] px, primary monitor only
-panelW = 480;                              % width reserved for the selector panel
+panelW = 460;                              % width of the selector panel window
 panelH = 556;
-selX = scr(1) + 20;
-selY = max(scr(2) + 40, scr(2) + scr(4) - panelH - 80);   % near top-left, leaving room for title/taskbars
 
 % ---- named arrow-colour presets -----------------------------------------
 colorNames = {'Orange (default)','Red','Blue','Green','Black','Magenta','Custom...'};
@@ -113,9 +106,38 @@ end
 fmtItems     = {'PDF (vector)', 'EPS (vector)', 'JPEG (raster)'};
 fmtItemsData = {'pdf', 'epsc', 'jpeg'};
 
-% ---- build the selector window -----------------------------------------
+% ---- find the active screen, then build the selector window ------------
+% Neither of the two heuristics tried earlier (monitor containing the
+% origin; monitor under the mouse pointer) reliably matched the screen
+% the user was actually looking at, and reading a uifigure's own Position
+% right after creating it turned out to be unsafe on some systems --
+% MATLAB's web-based uifigure has an asynchronous handshake with its
+% native renderer, and querying/mutating Position during that window can
+% throw "Invalid or deleted object" even though the figure otherwise
+% exists. An ordinary FIGURE has no such race (ordinary figures are
+% plain, synchronous HG2 objects), so a short-lived invisible one is used
+% purely to ask MATLAB "where would a new window normally appear right
+% now", and its answer decides which monitor everything below is placed
+% on. The uifigure itself is then created in a SINGLE atomic call with an
+% explicit Position, exactly as this function always did before the
+% Position-readback approach was introduced -- no property read/write is
+% ever performed on the uifigure after it is constructed.
+tmpFig = figure('Visible', 'off');
+drawnow;
+tmpPos = tmpFig.Position;
+delete(tmpFig);
+
+mp = get(groot, 'MonitorPositions');   % [Nmonitors x 4], each row [left bottom width height]
+monIdx = find(tmpPos(1) >= mp(:,1) & tmpPos(1) <= mp(:,1) + mp(:,3) & ...
+              tmpPos(2) >= mp(:,2) & tmpPos(2) <= mp(:,2) + mp(:,4), 1);
+if isempty(monIdx), monIdx = 1; end
+scr = mp(monIdx, :);                   % [left bottom width height] px, the active monitor
+
+selX = scr(1) + 20;
+selY = max(scr(2) + 40, scr(2) + scr(4) - panelH - 80);   % near top-left, leaving room for title/taskbars
+
 selFig = uifigure('Name', sprintf('G16 Normal Mode Viewer - %s', filename), ...
-                   'Position', [selX selY 460 556]);
+                   'Position', [selX selY panelW panelH]);
 selFig.CloseRequestFcn = @(src, evt) closeViewer();
 
 uilabel(selFig, 'Position', [20 514 420 22], ...
@@ -319,18 +341,39 @@ drawMode(itemsData(1), false);
         applyLabelFontSize(currentModeFig, str2double(fontSizeDD.Value));
 
         % Make the mode figure as large as the screen allows, positioned
-        % to the right of the selector panel. When several mode figures
-        % are kept open at once (mode comparison), cascade them slightly
-        % so each one stays visible instead of exactly overlapping.
+        % to the right of the selector panel (so the panel's controls
+        % stay fully visible, never covered) -- but with BOTH edges of
+        % every coordinate explicitly clamped into the primary monitor's
+        % own [scr(1), scr(1)+scr(3)] x [scr(2), scr(2)+scr(4)] box.
+        % Enforcing only a MINIMUM size (as before) without also capping
+        % the MAXIMUM position/size let the figure's Position fall partly
+        % outside every single monitor on setups where the primary
+        % monitor was not much wider than the panel -- MATLAB/the OS then
+        % relocates such a figure, often onto the wrong display, which
+        % was the multi-screen glitch. Clamping figX/figY so the figure
+        % always ends exactly at the monitor's own right/bottom edge
+        % guarantees it can never spill onto a different monitor, while
+        % still sitting beside (not on top of) the selector panel.
         cascadeStep = 40;
         cascadeMax  = 6;
+        marginX     = 20;
+        minFigW     = 400;
+        minFigH     = 300;
         nOpenBefore = numel(openModeFigs(isgraphics(openModeFigs)));
         idx = mod(nOpenBefore, cascadeMax);
 
-        figW = max(500, scr(3) - panelW - 40 - cascadeMax*cascadeStep);
-        figH = max(400, scr(4) - 80 - cascadeMax*cascadeStep);
-        figX = scr(1) + panelW + idx*cascadeStep;
+        rightEdge  = scr(1) + scr(3);
+        bottomEdge = scr(2) + scr(4);
+
+        figX = selX + panelW + marginX + idx*cascadeStep;
+        figX = min(figX, rightEdge - minFigW);
+        figX = max(figX, scr(1));
+        figW = rightEdge - figX;
+
         figY = scr(2) + 40 + (cascadeMax - idx)*cascadeStep;
+        figY = min(figY, bottomEdge - minFigH);
+        figY = max(figY, scr(2));
+        figH = bottomEdge - figY;
         try
             set(currentModeFig, 'Units', 'pixels', 'Position', [figX figY figW figH]);
         catch
