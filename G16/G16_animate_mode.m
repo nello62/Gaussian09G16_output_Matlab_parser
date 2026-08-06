@@ -20,6 +20,20 @@ function outfile = G16_animate_mode(mol, nm, mode_idx, varargin)
 %       'FramesPerCycle'  - frames per oscillation period (default 30)
 %       'NCycles'         - number of periods rendered (default 2)
 %       'FPS'             - video frame rate (default 20)
+%       'Crop'            - tightly crop every frame around the molecule,
+%                            instead of writing the whole (mostly blank)
+%                            figure window (default true). The crop
+%                            rectangle is computed once, from the two
+%                            oscillation extremes, and then held fixed
+%                            for every frame, so the video does not jitter
+%                            or clip atoms at any phase.
+%       'CropMargin'      - blank margin kept around the molecule when
+%                            'Crop' is true, in pixels (default 12)
+%       'ShowTitle'       - draw the filename/mode/frequency title text in
+%                           every frame (default false). Left off by
+%                           default so the title's own bounding box does
+%                           not force a taller crop than the molecule
+%                           itself needs.
 %       'View'            - [azimuth elevation] in degrees, the starting
 %                            camera orientation (default [] = MATLAB's
 %                            standard 3D default view, azimuth=-37.5,
@@ -66,6 +80,9 @@ addParameter(p, 'NCycles',        2,     @isnumeric);
 addParameter(p, 'FPS',            20,    @isnumeric);
 addParameter(p, 'View',           [],    @isnumeric);
 addParameter(p, 'ShowWaitbar',    true,  @islogical);
+addParameter(p, 'Crop',           true,  @islogical);
+addParameter(p, 'CropMargin',     12,    @isnumeric);
+addParameter(p, 'ShowTitle',      false, @islogical);
 parse(p, mol, nm, mode_idx, varargin{:});
 
 scale            = p.Results.Scale;
@@ -79,6 +96,9 @@ n_cycles         = round(p.Results.NCycles);
 fps              = p.Results.FPS;
 show_wb          = p.Results.ShowWaitbar;
 outfile          = p.Results.Filename;
+do_crop          = p.Results.Crop;
+crop_margin      = round(p.Results.CropMargin);
+show_title       = p.Results.ShowTitle;
 
 if mode_idx < 1 || mode_idx > nm.Nmodes
     error('G16_animate_mode:badIndex', ...
@@ -145,12 +165,19 @@ for bb = 1:height(bondTable)
 end
 bond_list = [bondTable.Atom1, bondTable.Atom2, bond_order];
 
-freq_str = sprintf('Mode %d - %.1f cm^{-1}', mode_idx, nm.freq(mode_idx));
-if isfield(mol, 'filename') && ~isempty(mol.filename)
-    [~, fn] = fileparts(mol.filename);
-    fig_title = sprintf('%s\n%s', strrep(fn, '_', '\_'), freq_str);
+if show_title
+    freq_str = sprintf('Mode %d - %.1f cm^{-1}', mode_idx, nm.freq(mode_idx));
+    if isfield(mol, 'filename') && ~isempty(mol.filename)
+        [~, fn] = fileparts(mol.filename);
+        fig_title = sprintf('%s\n%s', strrep(fn, '_', '\_'), freq_str);
+    else
+        fig_title = freq_str;
+    end
 else
-    fig_title = freq_str;
+    fig_title = ' ';   % a single space renders no visible ink, so it is
+                        % excluded from the content bounding box used for
+                        % cropping, unlike an empty string (which
+                        % G16_draw_molecule replaces with a default title)
 end
 
 % -------------------------------------------------------------------------
@@ -160,12 +187,54 @@ fig = figure('Color', 'white', 'Name', sprintf('Animating Mode %d...', mode_idx)
              'NumberTitle', 'off');
 ax = axes('Parent', fig);
 
+total_frames = frames_per_cycle * n_cycles;
+mol_frame = mol;
+cleaner = onCleanup(@() close(fig));   % ensures the figure closes even on error
+
+    function frame = renderPhase(phase)
+    % Draws the molecule at the given oscillation phase and captures the
+    % figure. cla(ax) was found to leave stale Surface/Line/Text objects
+    % behind in this 3D+lighting configuration (confirmed via findall:
+    % counts kept growing frame to frame even immediately after cla),
+    % causing the video to show all frames superimposed instead of one at
+    % a time. Deleting and recreating the axes is the reliable fix.
+        mol_frame.xyz = mol.xyz + phase * U_scaled;
+        delete(ax);
+        ax = axes('Parent', fig);
+        G16_draw_molecule(mol_frame, 'Ax', ax, 'AtomScale', atom_scale, ...
+            'BondTol', bond_tol, 'ShowLabels', show_labels, ...
+            'ShowLegend', false, 'Title', fig_title, 'BondList', bond_list);
+        if ~isempty(view_angle)
+            view(ax, view_angle(1), view_angle(2));   % overrides G16_draw_molecule's default view(3)
+        end
+        xlim(ax, xlim_fixed);
+        ylim(ax, ylim_fixed);
+        zlim(ax, zlim_fixed);
+        drawnow;
+        frame = getframe(fig);
+    end
+
+% -------------------------------------------------------------------------
+% Crop rectangle: fixed axis limits mean the plotted box occupies the same
+% pixel rectangle in every frame regardless of oscillation phase, so it is
+% enough to measure it once here (from the two oscillation extremes, which
+% bound the whole animation) and reuse it for every frame below -- this is
+% what removes the large blank margin around the molecule without ever
+% clipping an atom at any phase.
+% -------------------------------------------------------------------------
+if do_crop
+    frame_plus  = renderPhase(1);
+    frame_minus = renderPhase(-1);
+    bbox = local_union_bbox( ...
+        local_content_bbox(frame_plus.cdata), ...
+        local_content_bbox(frame_minus.cdata));
+    bbox = local_pad_bbox(bbox, crop_margin, size(frame_plus.cdata));
+end
+
 vw = VideoWriter(outfile, 'MPEG-4');
 vw.FrameRate = fps;
 vw.Quality   = 90;
 open(vw);
-
-total_frames = frames_per_cycle * n_cycles;
 
 if show_wb
     fprintf('G16_animate_mode: rendering mode %d animation (%d frames)...\n', ...
@@ -173,32 +242,12 @@ if show_wb
 end
 progress_step = max(1, round(total_frames / 10));   % ~10 console updates total
 
-mol_frame = mol;
-cleaner = onCleanup(@() close(fig));   % ensures the figure closes even on error
-
 for k = 0:total_frames-1
     phase = sin(2*pi*k/frames_per_cycle);
-    mol_frame.xyz = mol.xyz + phase * U_scaled;
-
-    % cla(ax) was found to leave stale Surface/Line/Text objects behind
-    % in this 3D+lighting configuration (confirmed via findall: counts
-    % kept growing frame to frame even immediately after cla), causing
-    % the video to show all frames superimposed instead of one at a
-    % time. Deleting and recreating the axes is the reliable fix.
-    delete(ax);
-    ax = axes('Parent', fig);
-    G16_draw_molecule(mol_frame, 'Ax', ax, 'AtomScale', atom_scale, ...
-        'BondTol', bond_tol, 'ShowLabels', show_labels, ...
-        'ShowLegend', false, 'Title', fig_title, 'BondList', bond_list);
-    if ~isempty(view_angle)
-        view(ax, view_angle(1), view_angle(2));   % overrides G16_draw_molecule's default view(3)
+    frame = renderPhase(phase);
+    if do_crop
+        frame.cdata = frame.cdata(bbox(1):bbox(2), bbox(3):bbox(4), :);
     end
-    xlim(ax, xlim_fixed);
-    ylim(ax, ylim_fixed);
-    zlim(ax, zlim_fixed);
-
-    drawnow;
-    frame = getframe(fig);
     writeVideo(vw, frame);
 
     if show_wb && (mod(k+1, progress_step) == 0 || k+1 == total_frames)
@@ -245,5 +294,50 @@ function order = local_classify_bond_order(sym_i, sym_j, d)
         order = 2;
     else
         order = 1;
+    end
+end
+
+
+% =========================================================================
+function bbox = local_content_bbox(img)
+%LOCAL_CONTENT_BBOX  Tight [rowMin rowMax colMin colMax] bounding box of the
+%   non-background pixels in a captured frame (img: HxWx3 uint8). The
+%   figure background is plain white (Color='white', axis off, no box/
+%   ticks), so any pixel that is not near-white is molecule/label/title
+%   content. Falls back to the full image if nothing is found (e.g. an
+%   all-white frame), so cropping degrades to a no-op rather than erroring.
+    isBackground = all(img >= 250, 3);
+    [rows, cols] = find(~isBackground);
+    if isempty(rows)
+        bbox = [1, size(img,1), 1, size(img,2)];
+    else
+        bbox = [min(rows), max(rows), min(cols), max(cols)];
+    end
+end
+
+% =========================================================================
+function bbox = local_union_bbox(bbox1, bbox2)
+%LOCAL_UNION_BBOX  Smallest [rowMin rowMax colMin colMax] box containing
+%   both input boxes (same convention as LOCAL_CONTENT_BBOX).
+    bbox = [min(bbox1(1), bbox2(1)), max(bbox1(2), bbox2(2)), ...
+            min(bbox1(3), bbox2(3)), max(bbox1(4), bbox2(4))];
+end
+
+% =========================================================================
+function bbox = local_pad_bbox(bbox, margin, imgSize)
+%LOCAL_PAD_BBOX  Expands BBOX by MARGIN pixels on every side, clamped to
+%   the image bounds (imgSize = size(img), i.e. [nRows nCols ...]), and
+%   nudges the width/height to be even -- required by some MPEG-4/H.264
+%   encoders, which reject odd frame dimensions.
+    bbox(1) = max(1,          bbox(1) - margin);
+    bbox(2) = min(imgSize(1), bbox(2) + margin);
+    bbox(3) = max(1,          bbox(3) - margin);
+    bbox(4) = min(imgSize(2), bbox(4) + margin);
+
+    if mod(bbox(2) - bbox(1) + 1, 2) ~= 0
+        if bbox(2) < imgSize(1), bbox(2) = bbox(2) + 1; else, bbox(1) = bbox(1) + 1; end
+    end
+    if mod(bbox(4) - bbox(3) + 1, 2) ~= 0
+        if bbox(4) < imgSize(2), bbox(4) = bbox(4) + 1; else, bbox(3) = bbox(3) + 1; end
     end
 end
