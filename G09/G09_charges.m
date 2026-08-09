@@ -34,10 +34,16 @@ function ch = G09_charges(filename, varargin)
 %       'FontSize'        - label font size in points (default: 8)
 %       'ColorScale'      - 'RdBu' blue=neg/red=pos (default) | 'none'
 %       'threshold'       - hide labels with |q| < threshold (default: 0)
-%       'ShowDipole'      - overlay the total dipole moment vector,
-%                           anchored at the charge-weighted centroid of
-%                           the negative ("electronic") partial charges
-%                           by default (default: false)
+%       'ShowDipole'      - overlay the total dipole moment vector in the
+%                           3D plot, anchored at the charge-weighted
+%                           centroid of the negative ("electronic")
+%                           partial charges by default (default: false).
+%                           The dipole moment itself (see .dipole and
+%                           related OUTPUT fields below) is always
+%                           computed regardless of this option; it only
+%                           controls whether the arrow is actually drawn
+%                           (and, when true, whether a read failure is
+%                           reported as a warning).
 %       'DipoleOrigin'    - anchor point for the dipole arrow:
 %                             'negcharge' (default) - centroid of
 %                                 atoms with NEGATIVE partial charge
@@ -67,15 +73,20 @@ function ch = G09_charges(filename, varargin)
 %       .label          char           exact header label found in file
 %       .Natoms         int
 %       .filename       char
-%       .dipole         [1x3]          dipole moment (Debye), only when
-%                                      'ShowDipole' is true; [] otherwise
+%       .dipole         [1x3]          dipole moment (Debye), always
+%                                      computed (independently of
+%                                      'ShowDipole', which only controls
+%                                      whether the 3D arrow is drawn);
+%                                      [] if the file has no readable
+%                                      dipole moment
 %       .dipole_origin  [1x3]          anchor point used for the arrow
-%                                      (Angstrom), only when 'ShowDipole'
-%                                      is true; [] otherwise
-%       .dipole_Debye   double         |mu| in Debye, only when
-%                                      'ShowDipole' is true; [] otherwise
-%       .dipole_au      double         |mu| in atomic units, only when
-%                                      'ShowDipole' is true; [] otherwise
+%                                      (Angstrom), always computed
+%                                      alongside .dipole; [] otherwise
+%       .dipole_Debye   double         |mu| in Debye, always computed
+%                                      alongside .dipole; [] otherwise
+%       .dipole_au      double         |mu| in atomic units, always
+%                                      computed alongside .dipole; []
+%                                      otherwise
 %
 %   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
 %   Email: sebastiano.trusso@cnr.it
@@ -290,32 +301,41 @@ ch.dipole_Debye  = [];
 ch.dipole_au     = [];
 
 % -------------------------------------------------------------------------
-% Dipole moment (optional). Computed here -- rather than inside the
-% plotting block below -- so that .dipole / .dipole_origin are populated
-% in the output struct even when 'plot' is false.
+% Dipole moment. Always computed (not just when 'ShowDipole' is true), so
+% .dipole/.dipole_origin/.dipole_Debye/.dipole_au are populated in the
+% output struct regardless -- 'ShowDipole' only controls whether the 3D
+% arrow is drawn. G09_dipole_polar's own console summary is suppressed
+% (via evalc) unless 'ShowDipole' is true, so silently computing this in
+% the background does not add unrequested console output to the common
+% (ShowDipole=false) case; any read failure is likewise only warned about
+% when the user actually asked to see the dipole.
 % -------------------------------------------------------------------------
 mol = [];   % loaded lazily, at most once, by whichever block needs it first
-if show_dipole
-    try
+try
+    if show_dipole
         dp = G09_dipole_polar(filename, 'units', 'Debye', 'Lines', lines);
-        mu = local_extract_dipole(dp);
-    catch ME
+    else
+        [~, dp] = evalc('G09_dipole_polar(filename, ''units'', ''Debye'', ''Lines'', lines)');
+    end
+    mu = local_extract_dipole(dp);
+catch ME
+    if show_dipole
         warning('G09_charges:dipoleReadFailed', ...
             'Could not read the dipole moment (%s); ''ShowDipole'' will be ignored.', ME.message);
-        mu = [];
     end
-    if isempty(mu) || norm(mu) < eps
-        if isempty(mu)
-            warning('G09_charges:dipoleFieldNotFound', ...
-                'Dipole moment field not recognised in G09_dipole_polar output; ''ShowDipole'' will be ignored.');
-        end
-    else
-        mol = G09_structure(filename);
-        ch.dipole        = mu;
-        ch.dipole_origin = local_dipole_origin(dip_origin, mol.xyz, q_atom);
-        ch.dipole_Debye  = norm(mu);
-        ch.dipole_au     = norm(mu) * DEBYE_TO_AU;
+    mu = [];
+end
+if isempty(mu) || norm(mu) < eps
+    if isempty(mu) && show_dipole
+        warning('G09_charges:dipoleFieldNotFound', ...
+            'Dipole moment field not recognised in G09_dipole_polar output; ''ShowDipole'' will be ignored.');
     end
+else
+    mol = G09_structure(filename);
+    ch.dipole        = mu;
+    ch.dipole_origin = local_dipole_origin(dip_origin, mol.xyz, q_atom);
+    ch.dipole_Debye  = norm(mu);
+    ch.dipole_au     = norm(mu) * DEBYE_TO_AU;
 end
 
 % Value and unit symbol used for the dipole magnitude wherever it is

@@ -1,3 +1,5 @@
+import contextlib
+import io
 import math
 import os
 import re
@@ -156,25 +158,37 @@ def g16_charges(filename, type="Mulliken", mode="atom", plot=True,
         dipole=None, dipole_origin=None, dipole_Debye=None, dipole_au=None,
     )
 
+    # Dipole moment: always computed (not just when show_dipole is True), so
+    # ch.dipole/.dipole_origin/.dipole_Debye/.dipole_au are populated
+    # regardless -- show_dipole only controls whether the 3D arrow is drawn.
+    # g16_dipole_polar's own console summary is suppressed unless
+    # show_dipole is True, so silently computing this in the background
+    # does not add unrequested console output to the common
+    # (show_dipole=False) case; any read failure is likewise only warned
+    # about when the user actually asked to see the dipole.
     mol = None
-    if show_dipole:
-        from .structure import g16_structure
-        mu = None
-        try:
+    from .structure import g16_structure
+    mu = None
+    try:
+        if show_dipole:
             dp = g16_dipole_polar(filename, units="debye", lines=lines)
-            mu = np.array([dp.mu_x, dp.mu_y, dp.mu_z])
-        except Exception as exc:
+        else:
+            with contextlib.redirect_stdout(io.StringIO()):
+                dp = g16_dipole_polar(filename, units="debye", lines=lines)
+        mu = np.array([dp.mu_x, dp.mu_y, dp.mu_z])
+    except Exception as exc:
+        if show_dipole:
             warnings.warn(f"Could not read the dipole moment ({exc}); ShowDipole will be ignored.")
 
-        if mu is None or np.linalg.norm(mu) < np.finfo(float).eps:
-            if mu is None:
-                warnings.warn("Dipole moment field not recognised in g16_dipole_polar output; ShowDipole will be ignored.")
-        else:
-            mol = g16_structure(filename, lines=lines)
-            ch.dipole = mu
-            ch.dipole_origin = _dipole_origin(dipole_origin, mol.xyz, q_atom)
-            ch.dipole_Debye = float(np.linalg.norm(mu))
-            ch.dipole_au = ch.dipole_Debye * DEBYE_TO_AU
+    if mu is None or np.linalg.norm(mu) < np.finfo(float).eps:
+        if mu is None and show_dipole:
+            warnings.warn("Dipole moment field not recognised in g16_dipole_polar output; ShowDipole will be ignored.")
+    else:
+        mol = g16_structure(filename, lines=lines)
+        ch.dipole = mu
+        ch.dipole_origin = _dipole_origin(dipole_origin, mol.xyz, q_atom)
+        ch.dipole_Debye = float(np.linalg.norm(mu))
+        ch.dipole_au = ch.dipole_Debye * DEBYE_TO_AU
 
     dip_value_disp = dip_unit_symbol = None
     if ch.dipole is not None:
