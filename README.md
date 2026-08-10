@@ -161,6 +161,24 @@ See [`G16parser/README.md`](G16parser/README.md) for the full function
 reference and [`G16parser/example.py`](G16parser/example.py) for a runnable
 end-to-end example.
 
+## Scope and disclaimer
+
+This toolbox is a research and productivity aid for parsing, analysing,
+and visualising Gaussian 09/16 output — it is not a validated or
+certified computational-chemistry package, and its results have not been
+benchmarked beyond the test cases described in the reference manual. A
+few functions rely on geometric or heuristic approximations rather than
+a value read directly from Gaussian's own analysis — most notably,
+`draw_molecule`'s double/triple-bond rendering is a bond-length estimate,
+not an NBO-derived bond order (see [Rendering NBO-derived bond
+orders](#rendering-nbo-derived-bond-orders) above for the accurate
+alternative). Each such approximation, and its known limitations, is
+documented in the function's own help text and in the manual. Please
+independently verify any result before relying on it for a scientific
+conclusion or publication, as you would with any third-party analysis
+tool — this note is a scientific/methodological caveat, separate from
+the legal warranty disclaimer in [`LICENSE`](LICENSE).
+
 ## License
 
 See [`LICENSE`](LICENSE).

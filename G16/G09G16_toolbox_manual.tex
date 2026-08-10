@@ -1,0 +1,2489 @@
+\documentclass[11pt,a4paper]{article}
+
+% =============================================================================
+% Packages
+% =============================================================================
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage[skins,breakable]{tcolorbox}
+
+\definecolor{codebg}{rgb}{0.95,0.95,0.95}
+\definecolor{notebg}{rgb}{0.93,0.96,0.99}
+\definecolor{notebar}{rgb}{0.20,0.45,0.75}
+
+% -----------------------------------------------------------------------------
+% Code / inline macros
+% -----------------------------------------------------------------------------
+\newcommand{\code}[1]{\texttt{#1}}
+
+% -----------------------------------------------------------------------------
+% MATLAB code listing style
+% -----------------------------------------------------------------------------
+\lstdefinestyle{matlabstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  rulecolor=\color{gray!40},
+  xleftmargin=4pt, xrightmargin=4pt,
+  aboveskip=6pt, belowskip=6pt
+}
+\lstset{style=matlabstyle}
+
+% -----------------------------------------------------------------------------
+% Option/field table environments (plain tabular + booktabs)
+% NOTE: tabularx's X column cannot have its \end{tabularx} hidden inside a
+% wrapper \newenvironment (its width-measurement pre-pass cannot see through
+% the macro expansion). We therefore use plain `tabular` with an
+% automatically computed width for the last column instead.
+% -----------------------------------------------------------------------------
+% 3-column version: {Header1}{Header2}{Header3}{width1}{width2}{lastcoltype (ignored)}
+\newenvironment{argtable}[6]{%
+  \begin{center}
+  \renewcommand{\arraystretch}{1.25}
+  \setlength{\dimen2}{\dimexpr\textwidth-#4-#5-6\tabcolsep-2\arrayrulewidth\relax}
+  \begin{tabular}{@{}p{#4}p{#5}p{\dimen2}@{}}
+  \toprule
+  \textbf{#1} & \textbf{#2} & \textbf{#3} \\
+  \midrule
+}{%
+  \bottomrule
+  \end{tabular}
+  \end{center}
+}
+
+% 2-column version: {Header1}{Header2}{width1}{lastcoltype (ignored)}
+\newenvironment{argtabletwo}[4]{%
+  \begin{center}
+  \renewcommand{\arraystretch}{1.25}
+  \setlength{\dimen2}{\dimexpr\textwidth-#3-4\tabcolsep-2\arrayrulewidth\relax}
+  \begin{tabular}{@{}p{#3}p{\dimen2}@{}}
+  \toprule
+  \textbf{#1} & \textbf{#2} \\
+  \midrule
+}{%
+  \bottomrule
+  \end{tabular}
+  \end{center}
+}
+
+% -----------------------------------------------------------------------------
+% Note / remark box
+% -----------------------------------------------------------------------------
+\newtcolorbox{tbnote}{
+  enhanced, breakable,
+  colback=notebg, colframe=notebar,
+  boxrule=0pt, leftrule=2.5pt,
+  arc=0pt, outer arc=0pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  before skip=8pt, after skip=8pt
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=notebar,
+  urlcolor=notebar,
+  citecolor=notebar
+}
+
+% =============================================================================
+\title{\textbf{G09/G16 MATLAB Toolbox}\\[4pt]
+       \large A parsing and visualisation toolbox for Gaussian~09/16 output files}
+\author{Sebastiano Trusso \\ CNR -- Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy}
+\date{Version 1.0 --- 2026}
+
+% =============================================================================
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Introduction}
+% =============================================================================
+This manual documents the \textbf{G09/G16 Toolbox}, a set of MATLAB functions
+for parsing, analysing, and visualising Gaussian~09 and Gaussian~16 output
+files (\code{.out}/\code{.log}) and formatted checkpoint files
+(\code{.fchk}). The toolbox covers:
+
+\begin{itemize}[nosep]
+  \item extraction of molecular geometry, energies, thermochemistry, dipole
+        moment, polarisability, and hyperpolarisability;
+  \item vibrational analysis: normal modes, IR/Raman spectra, and interactive
+        mode visualisation;
+  \item molecular-orbital energy diagrams and TD-DFT excited-state analysis;
+  \item 3D molecular structure rendering (CPK ball-and-stick models) with
+        atomic charge and dipole overlays;
+  \item utility functions for bond-length tables, Gaussian version detection,
+        restart-file generation, and toolbox self-documentation.
+  \end{itemize}
+
+Function names follow the \code{G09\_xxx}/\code{G16\_xxx} convention,
+indicating which Gaussian version's output format the function targets.
+Where the two versions behave identically, this manual documents them in a
+single combined subsection (\code{G09\_xxx / G16\_xxx}); where behaviour
+differs, the differences are called out explicitly.
+
+\begin{tbnote}
+Every parsing function that reads a \code{.out}/\code{.log} file accepts an
+optional \code{'Lines'} Name-Value parameter: a cell array of pre-read file
+lines. This lets \code{G09\_read\_all}/\code{G16\_read\_all} read the file
+from disk once and reuse the same lines across every sub-parser, instead of
+each function re-reading and re-splitting the file independently. Passing
+\code{'Lines'} is entirely optional --- omitting it falls back to reading
+the file normally.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Wrong-toolbox warning.} Because Gaussian~09 and Gaussian~16 output
+formats differ, using the wrong toolbox on a file (e.g.\ \code{G16\_energy}
+on a Gaussian~09 file) can silently misparse it rather than raising an
+obvious error --- for example, \code{G16\_dipole\_polar} on a Gaussian~09
+file returns \code{NaN} for the polarisability instead of an error. To
+catch this, every function that reads a file from disk checks the
+Gaussian-version citation line (\code{"Gaussian NN, Revision X.YY,"}) it
+just read and prints a non-blocking \code{warning(...)} if \code{NN} does
+not match the toolbox being used, suggesting the other one instead. The
+check runs only once per actual disk read (see
+Section~\ref{ssub:checkmatch}), so \code{G09\_read\_all}/\code{G16\_read\_all}
+produce a single warning, not one per sub-parser.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Which \code{.in} keywords generate which \code{.out} section}
+\label{sec:keyword-section-map}
+% =============================================================================
+Each extraction function reads one specific section of the \code{.out}/
+\code{.log} file, identified by a fixed header string or line pattern.
+Most of those sections only appear if the corresponding Gaussian route
+keyword was present in the \code{.in}/\code{.gjf} job that produced the
+file --- otherwise the function raises an error (or, for optional
+response-property fields, returns \code{NaN}/empty rather than failing).
+The table below maps each function to the \code{.out} section it reads
+and the \code{.in} keyword(s) that generate it. Function names omit the
+\code{G09\_}/\code{G16\_} prefix (identical for both versions unless
+noted).
+
+\begin{longtable}{@{}p{2.3cm}p{4.5cm}p{3.3cm}p{\dimexpr\textwidth-2.3cm-4.5cm-3.3cm-8\tabcolsep-2\arrayrulewidth\relax}@{}}
+\toprule
+\textbf{Function} & \textbf{\code{.out} section read} & \textbf{\code{.in} keyword} & \textbf{Notes} \\
+\midrule
+\endhead
+\code{structure} & \code{"Standard orientation"} / \code{"Input orientation"} & (default) & Always printed. \code{nosymm}/\code{nosym} suppresses "Standard orientation", leaving only "Input orientation" \\
+\code{energy} (SCF) & \code{"SCF Done:"} & (default) & Printed by any HF/DFT energy evaluation (single point, opt, freq, ...) \\
+\code{energy} (thermochemistry) & \code{"Zero-point correction="}, \code{"Sum of electronic and ... Energies="} & \code{freq} & ZPE, H, G, S \\
+\code{charges} (Mulliken) & \code{"Mulliken charges:"} & (default) & \\
+\code{charges} (APT) & \code{"APT charges:"} & \code{freq} & Printed automatically with any frequency job (dipole-derivative charges) --- no separate \code{pop=apt} needed \\
+\code{dipole\_polar} (dipole) & \code{"Dipole moment (...)"} & (default) & \\
+\code{dipole\_polar} (static Alpha) & \code{"Exact polarizability:"} & \code{polar} & \\
+\code{dipole\_polar} (dynamic Alpha) & \code{"Alpha(-w,w) frequency N"} & \code{polar cphf=rdfreq} & Requires an explicit frequency list (a.u.) after the route/title/charge-multiplicity block in the \code{.in} file \\
+\code{nmodes} & \code{"and normal coordinates:"} & \code{freq} & \\
+\code{spectra} (IR) & \code{"Harmonic frequencies ... IR intensities"} & \code{freq} & \\
+\code{spectra} (Raman) & \code{"Harmonic frequencies ... Raman scattering"} & \code{freq=raman} & \\
+\code{orbital\_\discretionary{}{}{}energies} & \code{"Alpha occ./virt. eigenvalues"} (+ \code{Beta ...} for unrestricted) & (default) & Full eigenvalue list is printed unconditionally, not gated by \code{pop=full} \\
+\code{convergence} & \code{"Item               Value     Threshold  Converged?"} & \code{opt} & \\
+\code{charge\_mult} & charge/multiplicity echo near the top of the file & (default) & Mirrors the \code{.in} charge/multiplicity line \\
+\code{route} & route-section echo near the top of the file & (default) & \\
+\code{get\_\discretionary{}{}{}bond\_\discretionary{}{}{}length} & derived from the structure section & (default) & Purely geometric (covalent radii); no dedicated Gaussian section \\
+\code{nbo\_bonds} & \code{"Natural Bond Orbitals (Summary)"} & \code{pop=nbo} & See Section~\ref{sec:nbo-bonds-ref} \\
+\code{gaussian\_\discretionary{}{}{}version} & \code{"Gaussian NN, Revision X.YY,"} citation line & (default) & \\
+\code{hyperpolar} (vibrational Beta, G16 only) & \code{"Diagonal vibrational hyperpolarizability:"} & \code{polar freq} & Present even without \code{cphf=rdfreq} \\
+\code{hyperpolar} (electronic Beta, G16 only) & \code{"First dipole hyperpolarizability, Beta ..."}, \code{"Beta(0;0,0)"}, \code{"Beta(-w;w,0)"} & \code{polar field=... cphf=rdfreq} & Needs the field/frequency list in the \code{.in} file; \code{polar} alone gives only the vibrational Beta above \\
+\code{tddft} (G16 only) & \code{"Excited State N: ..."} & \code{td} (e.g.\ \code{td=(nstates=N)}) & \\
+\code{restart} & reuses the structure/route/charge\_mult sections above & (any completed step) & \\
+\bottomrule
+\end{longtable}
+
+\begin{tbnote}
+\textbf{\code{.fchk} functions.} \code{fchk\_read} and
+\code{charges\_fchk} (provided in both \code{G09/} and \code{G16/}) do
+not read \code{.out}/\code{.log} sections at all --- they read a
+formatted checkpoint file, produced by running \code{formchk} on the
+binary \code{.chk} file written by the job's \code{\%chk=...} link0
+command. No specific route keyword is required beyond \code{\%chk=...}
+itself.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Evidence, not assumption.} The keyword requirements above were
+verified directly against real Gaussian output files rather than
+inferred from general documentation --- e.g.\ APT charges and the full
+orbital-eigenvalue list turned out to be printed unconditionally
+(no \code{pop=apt}/\code{pop=full} needed), and the vibrational vs.\
+electronic hyperpolarisability distinction was confirmed by comparing a
+file run with plain \code{polar} against one run with
+\code{field=... cphf=rdfreq}, only the latter containing the full
+electronic Beta tensor.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{File I/O utilities}
+% =============================================================================
+\subsection{G09\_read\_lines}
+\label{ssub:readlines}
+
+\begin{lstlisting}
+lines = G09_read_lines(filename)
+\end{lstlisting}
+
+Low-level reader used internally by every other \code{G09\_XXX} parser.
+Reads a Gaussian~09 output file and returns a cell array of lines, with line
+endings stripped. Transparently handles CRLF line endings (as produced by
+Windows G09W builds) and ISO-8859-1 (Latin-1) encoding.
+
+\begin{tbnote}
+G16 parsers read files directly with the platform default encoding rather
+than calling a separate \code{G16\_read\_lines} helper; the \code{'Lines'}
+parameter interface is identical across both toolboxes.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_check\_gaussian\_match / G16\_check\_gaussian\_match}
+\label{ssub:checkmatch}
+
+\begin{lstlisting}
+ok = G09_check_gaussian_match(lines, filename)
+ok = G16_check_gaussian_match(lines, filename)
+\end{lstlisting}
+
+Internal helper, called automatically by every function that reads a
+\code{.out}/\code{.log} file from disk (not part of the typical user-facing
+API, but documented here for completeness). Scans the already-read
+\code{lines} (no extra disk I/O) for the \code{"Gaussian NN, Revision
+X.YY,"} citation line printed near the top of every output file. If found
+and \code{NN} does not match the toolbox (9 for \code{G09\_*}, 16 for
+\code{G16\_*}), prints a non-blocking warning suggesting the other
+toolbox; otherwise does nothing. Returns \code{true} if no mismatch was
+detected (or the version is unknown), \code{false} if a warning was
+issued.
+
+\begin{tbnote}
+Because this check lives inside each function's own "read the file fresh
+from disk" branch, it only fires when a file is actually opened --- if a
+function receives pre-read \code{lines} via the \code{'Lines'} parameter
+(e.g.\ every sub-parser called by \code{G09\_read\_all}/\code{G16\_read\_all}),
+it skips both the disk read and the check, so a single call to
+\code{read\_all} produces exactly one warning, not one per sub-parser.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Core data extraction}
+% =============================================================================
+\subsection{G09\_route / G16\_route}
+
+\begin{lstlisting}
+route = G09_route(filename)
+route = G16_route(filename)
+route = G16_route(filename, 'Lines', lines)
+\end{lstlisting}
+
+Extracts the complete route section (the \code{\#} line(s) between the two
+\code{-{}-{}-{}-} separators) as a single string.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Lines'} & \code{\{\}} & Pre-read file lines (Section~\ref{ssub:readlines}); read normally if omitted \\
+\end{argtable}
+
+\begin{lstlisting}
+r = G09_route('indaco.log');
+% '# opt freq=raman b3lyp/6-311++g(d,p) nosymm geom=connectivity field=x+50'
+\end{lstlisting}
+
+\begin{tbnote}
+Both \code{G09\_route}/\code{G16\_route} and \code{G09\_charge\_mult}/
+\code{G16\_charge\_mult} now accept the \code{'Lines'} option, consistent
+with the rest of the toolbox.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_structure / G16\_structure}
+
+\begin{lstlisting}
+mol = G09_structure(filename)
+mol = G09_structure(filename, 'step', 'last')
+mol = G09_structure(filename, 'step', 'first')
+mol = G09_structure(filename, 'step', N)
+
+mol = G16_structure(filename)
+mol = G16_structure(filename, 'orientation', 'standard')
+mol = G16_structure(filename, 'orientation', 'input')
+\end{lstlisting}
+
+Extracts the molecular geometry from a Gaussian output file.
+
+\begin{tbnote}
+\textbf{Difference:} Gaussian~09 writes only \code{"Input orientation:"}
+blocks (never \code{"Standard orientation:"}), so \code{G09\_structure} has
+no \code{'orientation'} option. Gaussian~16 can write either, so
+\code{G16\_structure} exposes \code{'orientation'} = \code{'standard'}
+(default, falls back to input if absent) \textbar\ \code{'input'} \textbar\
+\code{'auto'}.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.6cm}{X}
+\code{'step'}        & \code{'last'} & Which geometry block to extract: \code{'first'}, \code{'last'}, or an integer index \\
+\code{'orientation'} & \code{'auto'} (G16 only) & \code{'standard'} \textbar\ \code{'input'} \textbar\ \code{'auto'} \\
+\code{'Lines'}       & \code{\{\}}   & Pre-read file lines; read normally if omitted \\
+\end{argtable}
+
+\begin{argtable}{Field}{Type}{Description}{2.8cm}{2.2cm}{X}
+\code{.symbols}     & cell   & Atomic symbols \\
+\code{.xyz}         & double & Coordinates in \AA\ (X Y Z) \\
+\code{.Z}           & int    & Atomic numbers \\
+\code{.Natoms}      & int    & Number of atoms \\
+\code{.step}        & int    & Index of the extracted step (1-based) \\
+\code{.n\_steps}    & int    & Total geometry blocks found in the file \\
+\code{.orientation} & char   & \code{'Input orientation'} (always, G09) or \code{'standard'}/\code{'input'} (G16) \\
+\code{.filename}    & char   & Source file name \\
+\end{argtable}
+
+\begin{lstlisting}
+mol = G09_structure('indaco.log');
+mol = G16_structure('calc.out', 'orientation', 'input');
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_energy / G16\_energy}
+
+\begin{lstlisting}
+en = G09_energy(filename)
+en = G09_energy(filename, 'step', 'last')
+en = G09_energy(filename, 'step', N)
+\end{lstlisting}
+
+Extracts SCF energy and thermochemistry data.
+
+\begin{argtable}{Field}{Type}{Description}{3.0cm}{1.8cm}{X}
+\code{.SCF}        & double & SCF energy (Hartree) \\
+\code{.method}     & char   & Method string, e.g.\ \code{'RB3LYP'} \\
+\code{.ZPE\_corr}  & double & Zero-point correction (Hartree) \\
+\code{.U\_corr}    & double & Thermal correction to energy (Hartree) \\
+\code{.H\_corr}    & double & Thermal correction to enthalpy (Hartree) \\
+\code{.G\_corr}    & double & Thermal correction to Gibbs free energy (Hartree) \\
+\code{.E0}         & double & SCF~+~ZPE (Hartree) \\
+\code{.U}          & double & SCF~+~U\_corr (Hartree, G16 only) \\
+\code{.H}          & double & SCF~+~H\_corr (Hartree) \\
+\code{.G}          & double & SCF~+~G\_corr (Hartree) \\
+\code{.S\_JmolK}   & double & Entropy $S$ (J\,mol$^{-1}$K$^{-1}$, G09) \\
+\code{.ZPE\_kJ}    & double & Zero-point energy (kJ/mol) \\
+\code{.T}, \code{.P} & double & Temperature (K), pressure (atm) \\
+\code{.has\_thermo}& logical& \code{false} for opt-only jobs (no freq); \code{*\_corr}, \code{E0}, \code{U}, \code{H}, \code{G}, \code{T}, \code{P} are \code{NaN} in that case \\
+\code{.G\_kJ}, \code{.H\_kJ} & double & $G$, $H$ in kJ/mol (G09) \\
+\code{.filename}   & char   & \\
+\end{argtable}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'step'}  & \code{'last'} & Which SCF block to extract: \code{'last'}, \code{'first'}, or integer $N$ \\
+\code{'Lines'} & \code{\{\}}   & Pre-read file lines \\
+\end{argtable}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_charge\_mult / G16\_charge\_mult}
+
+\begin{lstlisting}
+[charge, mult] = G09_charge_mult(filename)
+[charge, mult] = G16_charge_mult(filename)
+[charge, mult] = G16_charge_mult(filename, 'Lines', lines)
+\end{lstlisting}
+
+Extracts molecular charge and spin multiplicity from the
+\code{"Charge = ... Multiplicity = ..."} line. Format identical across G09
+and G16.
+
+\begin{lstlisting}
+[q, m] = G09_charge_mult('indaco.log');   % q = 0, m = 1
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_convergence / G16\_convergence}
+
+\begin{lstlisting}
+cv = G09_convergence(filename)
+cv = G09_convergence(filename, 'plot', true)
+
+cv = G16_convergence(filename)
+cv = G16_convergence(filename, 'plot', true)
+\end{lstlisting}
+
+Extracts geometry-optimisation convergence criteria (Max/RMS Force,
+Max/RMS Displacement) at every optimisation step, together with their
+thresholds and whether/when the job converged. Block format identical
+across G09 and G16.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'plot'} & \code{false} & Plot the four convergence series against their thresholds \\
+\end{argtable}
+
+\begin{argtable}{Field}{Type}{Description}{3.0cm}{2.0cm}{X}
+\code{.MaxForce}, \code{.RMSForce} & vector & Max / RMS force per step (a.u.) \\
+\code{.MaxDisp}, \code{.RMSDisp}   & vector & Max / RMS displacement per step (a.u.) \\
+\code{.thr\_MaxForce}, \code{.thr\_RMSForce}, \code{.thr\_MaxDisp}, \code{.thr\_RMSDisp} & double & Corresponding convergence thresholds \\
+\code{.converged} & logical & Whether all four criteria were satisfied \\
+\code{.conv\_step} & int/NaN & Step at which convergence was reached \\
+\code{.Nsteps}     & int     & Number of optimisation steps found \\
+\code{.filename}   & char    & \\
+\end{argtable}
+
+\begin{lstlisting}
+cv = G16_convergence('V_E00t.out', 'plot', true);
+cv.converged
+cv.conv_step
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_dipole\_polar / G16\_dipole\_polar}
+
+\begin{lstlisting}
+dp = G09_dipole_polar(filename)
+dp = G09_dipole_polar(filename, 'units', 'Debye')
+
+dp = G16_dipole_polar(filename)
+dp = G16_dipole_polar(filename, 'units', 'SI')
+\end{lstlisting}
+
+Extracts the dipole moment and polarisability tensor.
+
+\begin{tbnote}
+\textbf{Differences between G09 and G16:} G09 prints \code{"Exact
+polarizability:"} as six values on a single line (upper triangle, row
+order), rather than G16's formatted \code{Alpha(0;0)}/\code{Alpha(-w;w)}
+blocks. G09 has no dynamic (laser-frequency-dependent) polarisability
+unless requested via \code{Polar=OptRot} or similar keywords, and
+additionally prints a \code{"Diagonal vibrational polarizability:"} line
+(3 values, returned in \code{.alpha\_vib}). An approximate CPHF tensor, if
+printed by G09 (\code{"Approx polarizability:"}), is returned in
+\code{.alpha\_approx}. G16 instead reports full dynamic polarisability
+entries per laser frequency (\code{.alpha\_dyn}) and modal derivatives
+\code{.dmu\_dQ}/\code{.dalpha\_dQ} (related to IR intensities and Raman
+activities; for exact scaled values use \code{G16\_spectra} instead).
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'units'} & \code{'au'} & \code{'au'} \textbar\ \code{'Debye'} (dipole only, G09) / \code{'Debye'} (full, G16) \textbar\ \code{'SI'} \\
+\code{'Lines'} & \code{\{\}} & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.mu\_x}, \code{.mu\_y}, \code{.mu\_z}, \code{.mu\_tot}, \code{.mu\_units} & Dipole components, magnitude, unit string \\
+\code{.alpha\_iso}, \code{.alpha\_aniso} & Isotropic polarisability, anisotropy \\
+\code{.alpha\_tensor}, \code{.alpha\_units} & $3\times3$ static tensor (a.u.), unit string \\
+\code{.alpha\_vib}, \code{.has\_alpha\_vib} & Diagonal vibrational polarisability (a.u.), logical (G09) \\
+\code{.alpha\_approx} & CPHF approximate tensor (a.u.), \code{NaN} if absent (G09) \\
+\code{.alpha\_dyn}, \code{.N\_dyn} & Struct array of dynamic polarisability entries (per laser frequency), count (G16) \\
+\code{.dmu\_dQ}, \code{.dalpha\_dQ}, \code{.has\_deriv} & Dipole/polarisability derivatives w.r.t.\ normal modes, logical (G16) \\
+\code{.filename} & \\
+\end{argtabletwo}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_nmodes / G16\_nmodes}
+
+\begin{lstlisting}
+nm = G09_nmodes(filename)
+nm = G09_nmodes(filename, 'modes', [5 10 20])
+
+nm = G16_nmodes(filename)
+nm = G16_nmodes(filename, 'section', 'last')
+\end{lstlisting}
+
+Extracts normal-mode displacement vectors.
+
+\begin{tbnote}
+G09 writes only one \emph{Harmonic frequencies} section per file (even for
+opt+freq jobs), so \code{G09\_nmodes} has no \code{'section'} option --- it
+is implicit. G16 may contain more than one such section (e.g.\ a
+preliminary and a final one) and defaults to the last.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'modes'}  & \code{[]}   & Restrict output to specific mode indices \\
+\code{'section'}& \code{'last'} (G16 only) & \code{'last'} \textbar\ \code{'first'} \\
+\code{'Lines'}  & \code{\{\}} & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{2.8cm}{X}
+\code{.freq}, \code{.IR}, \code{.Raman} & Frequencies (cm$^{-1}$), IR intensities (KM/Mole), Raman activities (\AA$^4$/AMU, \code{[]} if absent) \\
+\code{.redmass}, \code{.frcconst} & Reduced masses (AMU), force constants (mDyne/\AA) \\
+\code{.symmetry} & Symmetry labels \\
+\code{.disp} & $[N_\text{atoms}\times3\times N_\text{modes}]$ Cartesian displacement vectors \\
+\code{.Nmodes}, \code{.Natoms}, \code{.has\_Raman}, \code{.filename} & \\
+\end{argtabletwo}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_spectra / G16\_spectra}
+\label{sec:spectra-ref}
+
+\begin{lstlisting}
+sp = G09_spectra(filename)
+sp = G09_spectra(filename, Name, Value, ...)
+
+sp = G16_spectra(filename)
+sp = G16_spectra(filename, 'section', 'last')
+\end{lstlisting}
+
+Extracts IR/Raman line spectra and generates Lorentzian-broadened
+continuous spectra.
+
+\begin{tbnote}
+G09 writes only one Harmonic-frequencies section per file, so
+\code{G09\_spectra} needs no \code{'section'} parameter; \code{G16\_spectra}
+exposes it to select which section to use when more than one is present.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'FWHM'}      & \code{10}   & Lorentzian FWHM (cm$^{-1}$) \\
+\code{'xmin'}      & \code{0}    & Lower wavenumber limit (cm$^{-1}$) \\
+\code{'xmax'}      & \code{4000} & Upper wavenumber limit (cm$^{-1}$) \\
+\code{'dx'}        & \code{1}    & Grid step (cm$^{-1}$) \\
+\code{'normalize'} & \code{false}& Normalise continua to maximum $=1$ \\
+\code{'plot'}      & \code{false}& Generate figure \\
+\code{'section'}   & \code{'last'} (G16 only) & \code{'last'} \textbar\ \code{'first'} \\
+\code{'Lines'}     & \code{\{\}} & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{2.8cm}{X}
+\code{.freq}, \code{.IR}, \code{.Raman} & Frequencies (cm$^{-1}$), IR intensities, Raman activities (\code{[]} if absent) \\
+\code{.has\_Raman}, \code{.Nmodes} & Logical, number of modes \\
+\code{.x}, \code{.IR\_cont}, \code{.Raman\_cont} & Wavenumber grid, broadened IR/Raman continua \\
+\code{.FWHM}, \code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+sp = G16_spectra('calc.out', 'FWHM', 15, 'xmin', 400, 'plot', true);
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G\_spectra\_nm \normalfont{(shared, no G09\_/G16\_ prefix)}}
+\label{sec:spectra-nm-ref}
+
+\begin{lstlisting}
+sp = G_spectra_nm(nm)
+sp = G_spectra_nm(nm, Name, Value, ...)
+\end{lstlisting}
+
+Builds the same Lorentzian-broadened IR/Raman continuum spectra as
+\code{G09\_spectra}/\code{G16\_spectra}, but directly from an
+already-parsed \code{nm} (normal modes) struct instead of reading a
+\code{.log}/\code{.out} file. Accepts the \code{nm} struct returned by
+\code{G09\_nmodes}/\code{G16\_nmodes}, or the \code{.nm} sub-struct
+returned by \code{G09\_fchk\_read}/\code{G16\_fchk\_read}
+(Section~\ref{sec:fchk-read-ref}) --- all four share the same field
+layout (\code{.freq}, \code{.IR}, \code{.Raman}, \code{.has\_Raman},
+\code{.Nmodes}, \code{.filename}), so a single function works with any
+of them regardless of Gaussian version or data source.
+
+\begin{tbnote}
+This fills a gap left by \code{G09\_fchk\_read}/\code{G16\_fchk\_read}:
+their output struct's \code{.nm} field has frequencies and IR/Raman
+intensities, but --- unlike \code{G09\_spectra}/\code{G16\_spectra} ---
+does not itself build the broadened continuum spectrum. \code{G\_spectra\_nm}
+does exactly that, directly from \code{data.nm}, with no \code{.out}/\code{.log}
+file needed at all.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'FWHM'}      & \code{10}   & Lorentzian FWHM (cm$^{-1}$) \\
+\code{'xmin'}      & \code{0}    & Lower wavenumber limit (cm$^{-1}$) \\
+\code{'xmax'}      & \code{4000} & Upper wavenumber limit (cm$^{-1}$) \\
+\code{'dx'}        & \code{1}    & Grid step (cm$^{-1}$) \\
+\code{'normalize'} & \code{false}& Normalise continua to maximum $=1$ \\
+\code{'plot'}      & \code{false}& Generate figure \\
+\end{argtable}
+
+Output fields are identical to \code{G09\_spectra}/\code{G16\_spectra}'s
+(Section~\ref{sec:spectra-ref} above): \code{.freq}, \code{.IR},
+\code{.Raman}, \code{.has\_Raman}, \code{.Nmodes}, \code{.x},
+\code{.IR\_cont}, \code{.Raman\_cont}, \code{.FWHM}, \code{.filename}.
+
+\begin{lstlisting}
+data = G16_fchk_read('molecule.fchk');
+sp   = G_spectra_nm(data.nm, 'FWHM', 15, 'plot', true);   % from a .fchk, no .out needed
+
+nm = G16_nmodes('molecule.out');
+sp = G_spectra_nm(nm, 'xmin', 400, 'normalize', true);    % from an already-read .out
+\end{lstlisting}
+
+\newpage
+
+% =============================================================================
+\section{Atomic charges}
+% =============================================================================
+\subsection{G09\_charges / G16\_charges}
+
+\begin{lstlisting}
+ch = G09_charges(filename)
+ch = G09_charges(filename, 'type', 'APT')
+ch = G09_charges(filename, 'mode', 'heavy')
+ch = G09_charges(filename, 'plot', true, 'threshold', 0.05)
+\end{lstlisting}
+
+Extracts Mulliken or APT atomic charges and optionally renders them on the
+3D structure, with an optional dipole-moment arrow overlay.
+
+\begin{tbnote}
+\textbf{Robustness:} handles all known Mulliken label variants across
+Gaussian revisions/OSes (e.g.\ \code{"Mulliken atomic charges:"} on G09
+Rev.\ A.02/Windows and some Linux builds; \code{"Mulliken charges:"} on G09
+Rev.\ B.01/C.01/D.01 and on all G16 revisions), by matching any line
+containing the charge-type keyword and \code{"charges:"}, excluding
+\code{"Sum of"} and H-summed lines. The exact label found is reported in
+\code{ch.label}.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{3.0cm}{X}
+\code{'type'}            & \code{'Mulliken'} & \code{'Mulliken'} \textbar\ \code{'APT'} \\
+\code{'mode'}            & \code{'atom'}      & \code{'atom'} \textbar\ \code{'heavy'} (H charges summed onto heavy atoms) \\
+\code{'plot'}            & \code{true}        & Render labels on the 3D structure \\
+\code{'AtomScale'}       & \code{0.35}        & CPK sphere scale \\
+\code{'BondTol'}         & \code{1.30}        & Bond detection tolerance \\
+\code{'BondList'}        & \code{[]}          & Passed straight through to \code{draw\_molecule}: explicit atom-index pairs (optionally with a pre-computed bond order), bypassing \code{BondTol} --- see the note below \\
+\code{'FontSize'}        & \code{8}           & Charge-label font size \\
+\code{'ColorScale'}      & \code{'RdBu'}      & \code{'RdBu'} (blue=neg/red=pos) \textbar\ \code{'none'} \\
+\code{'threshold'}       & \code{0}           & Hide labels with $|q| <$ threshold \\
+\code{'ShowDipole'}      & \code{false}       & Overlay the total dipole moment vector \emph{in the 3D plot}. The dipole moment itself (\code{.dipole} and related output fields, below) is always computed regardless of this option --- see the note below \\
+\code{'DipoleOrigin'}    & \code{'negcharge'} & Arrow anchor: \code{'negcharge'} (centroid of negative charges) \textbar\ \code{'poscharge'} \textbar\ \code{'centroid'} \textbar\ \code{[x y z]} \\
+\code{'DipoleScale'}     & \code{1.0}         & Arrow length, \AA\ per Debye \\
+\code{'DipoleColor'}     & \code{[0\ 0.6\ 0]} & Arrow colour \\
+\code{'DipoleLineWidth'} & \code{2.5}         & Arrow line width \\
+\code{'ShowDipoleLabel'} & \code{true}        & Annotate the arrow with $|\mu|$ \\
+\code{'DipoleFontSize'}  & \code{11}          & Dipole label font size \\
+\code{'DipoleUnits'}     & \code{'Debye'}     & Units for $|\mu|$: \code{'Debye'} \textbar\ \code{'au'} \\
+\code{'Lines'}           & \code{\{\}}        & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{2.8cm}{X}
+\code{.symbols}, \code{.charges} & Atomic symbols, per-atom charges (e) \\
+\code{.charges\_H} & H-summed charges on heavy atoms \\
+\code{.sum\_q} & Sum of all charges ($\approx 0$ for neutral molecules) \\
+\code{.type}, \code{.label} & \code{'Mulliken'}/\code{'APT'}, exact header label found \\
+\code{.Natoms} & \\
+\code{.dipole} & \code{[1x3]} dipole moment (Debye) --- always computed (see the note below); \code{[]} if the file has no readable dipole moment \\
+\code{.dipole\_origin} & \code{[1x3]} anchor point used for the arrow (\AA), computed alongside \code{.dipole} \\
+\code{.dipole\_Debye} & $|\mu|$ in Debye, computed alongside \code{.dipole} \\
+\code{.dipole\_au} & $|\mu|$ in atomic units, computed alongside \code{.dipole} \\
+\end{argtabletwo}
+
+\begin{tbnote}
+\textbf{The dipole moment is always computed.} \code{'ShowDipole'} only
+controls whether the arrow is actually drawn in the 3D plot (and, when
+true, whether a dipole read failure is reported as a warning) ---
+\code{.dipole}/\code{.dipole\_origin}/\code{.dipole\_Debye}/
+\code{.dipole\_au} are populated in the returned struct regardless, since
+reading the dipole moment is cheap. The underlying
+\code{G09/G16\_dipole\_polar} call's own console summary is suppressed
+unless \code{'ShowDipole'} is true, so this does not add unrequested
+console output to the common (\code{'ShowDipole'} left at its default
+\code{false}) case.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Rendering NBO-derived bond orders.} \code{'BondList'} accepts
+the same \code{[Nbonds x 3]} \code{Atom1}, \code{Atom2}, \code{BondOrder}
+matrix that \code{draw\_molecule} does (Section~\ref{sec:nbo-bonds-ref}),
+so the charge overlay renders on top of the real NBO-derived bond order
+instead of the geometric estimate:
+\begin{lstlisting}
+bt = G16_nbo_bonds('molecule_nbo.out');
+bond_list = [bt.Atom1, bt.Atom2, double(bt.BondOrder)];
+G16_charges('molecule_nbo.out', 'BondList', bond_list, 'ShowDipole', true);
+\end{lstlisting}
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_charges\_fchk / G16\_charges\_fchk}
+
+\begin{lstlisting}
+ch_out = G09_charges_fchk(mol, ch)
+ch_out = G09_charges_fchk(mol, ch, Name, Value, ...)
+
+ch_out = G16_charges_fchk(mol, ch)
+\end{lstlisting}
+
+Visualises atomic charges directly from a \code{G09\_fchk\_read}/
+\code{G16\_fchk\_read} struct, without requiring the corresponding
+\code{.log}/\code{.out} file. Mirrors the interface of \code{G09\_charges}/
+\code{G16\_charges} exactly, so the two can be used interchangeably once
+\code{data.mol} and \code{data.ch} are available.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.6cm}{X}
+\code{'mode'}       & \code{'atom'}  & \code{'atom'} \textbar\ \code{'heavy'} (requires \code{ch.charges\_H} non-empty --- \code{.fchk} files have no native H-summed data; use \code{G09\_charges}/\code{G16\_charges} on the \code{.log} for that) \\
+\code{'plot'}       & \code{true}    & \\
+\code{'AtomScale'}  & \code{0.35}    & \\
+\code{'BondTol'}    & \code{1.30}    & \\
+\code{'FontSize'}   & \code{8}       & \\
+\code{'ColorScale'} & \code{'RdBu'}  & \code{'RdBu'} \textbar\ \code{'none'} \\
+\code{'threshold'}  & \code{0}       & \\
+\end{argtable}
+
+\begin{lstlisting}
+data = G16_fchk_read('3typ.fchk');
+ch   = G16_charges_fchk(data.mol, data.ch);                      % default
+ch   = G16_charges_fchk(data.mol, data.ch, 'plot', false, 'threshold', 0.05);
+ch   = G16_charges_fchk(data.mol, data.ch, 'ColorScale', 'none'); % drop-in for G16_charges
+\end{lstlisting}
+
+Requires \code{mol} with fields \code{.symbols}, \code{.xyz}, \code{.Natoms},
+\code{.filename}, and \code{ch} with fields \code{.charges}, \code{.symbols},
+\code{.type}, \code{.Natoms} (\code{.charges\_H} optional).
+
+\begin{tbnote}
+Since the \code{.fchk} format is identical for G09 and G16,
+\code{G09\_charges\_fchk} and \code{G16\_charges\_fchk} are functionally
+identical (the latter simply calls \code{G16\_draw\_molecule} internally
+instead of \code{G09\_draw\_molecule}) --- both are provided so that either
+toolbox folder alone is enough.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Formatted checkpoint (.fchk) support}
+% =============================================================================
+\subsection{G09\_fchk\_read / G16\_fchk\_read}
+\label{sec:fchk-read-ref}
+
+\begin{lstlisting}
+data = G09_fchk_read(filename)
+data = G09_fchk_read(filename, 'verbose', false)
+
+data = G16_fchk_read(filename)
+\end{lstlisting}
+
+Reads a Gaussian 09/16 formatted checkpoint file (\code{.fchk}), generated
+with \code{formchk jobname.chk jobname.fchk}. Uses a single generic section
+parser (no hard-coded line counts) and is compatible with both G09 and G16
+\code{.fchk} files.
+
+\begin{tbnote}
+Supersedes the old \code{.fck}/newzmat-format reader: reads the modern
+\code{.fchk} ASCII format, returns SI-ready fields (XYZ in \AA, dipole in
+Debye), and needs no external helper functions. The formatted-checkpoint
+layout does not depend on the Gaussian version, so \code{G09\_fchk\_read}
+and \code{G16\_fchk\_read} are identical and each works on \code{.fchk}
+files produced by \emph{either} G09 or G16 --- both are provided purely so
+that either toolbox folder alone (\code{G09/} or \code{G16/}) is enough to
+read any \code{.fchk} file, without needing the other one on the path too.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'verbose'} & \code{true} & Print progress messages while parsing \\
+\end{argtable}
+
+\textbf{Output struct \code{data}} (grouped by section):
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.title}, \code{.method}, \code{.basis} & First line, method (e.g.\ \code{'RB3LYP'}), basis set (e.g.\ \code{'def2SVPP'}) \\
+\code{.Nat}, \code{.charge}, \code{.mult} & Number of atoms, molecular charge, spin multiplicity \\
+\code{.Nelec}, \code{.Nalpha}, \code{.Nbeta} & Total, alpha, beta electron counts \\
+\code{.Nbasis}, \code{.Nbasis\_indep} & Basis functions, independent basis functions \\
+\code{.symbols}, \code{.AN}, \code{.masses} & Atomic symbols, atomic numbers, real atomic masses (AMU) \\
+\code{.xyz}, \code{.xyz\_bohr} & Coordinates (\AA), coordinates (Bohr) \\
+\code{.SCF\_energy}, \code{.total\_energy}, \code{.virial\_ratio} & SCF energy, total energy (Hartree), virial ratio ($\approx 2$) \\
+\code{.alpha\_\discretionary{}{}{}orb\_\discretionary{}{}{}energies}, \code{.beta\_orb\_energies} & MO energies (Hartree); beta is \code{[]} if RHF \\
+\code{.alpha\_MO\_coeff} & Alpha MO coefficients (column-major) \\
+\code{.mulliken\_charges} & Mulliken charges (e) \\
+\code{.HOMO\_idx}, \code{.HOMO\_eV}, \code{.LUMO\_eV}, \code{.gap\_eV} & Frontier-orbital summary \\
+\code{.gradient}, \code{.rms\_force} & Cartesian gradient (Hartree/Bohr), RMS force \\
+\end{argtabletwo}
+
+\newpage
+
+% =============================================================================
+\section{Molecule and normal-mode visualisation}
+% =============================================================================
+\subsection{G09\_draw\_molecule / G16\_draw\_molecule}
+\label{sec:draw-molecule}
+
+\begin{lstlisting}
+G09_draw_molecule(mol)
+G09_draw_molecule(mol, 'Name', Value, ...)
+\end{lstlisting}
+
+Renders a 3D CPK ball-and-stick model from a \code{mol} struct (as returned
+by \code{G09\_structure}/\code{G16\_structure}), with bonds detected
+automatically from a covalent-radius criterion and drawn as 1, 2, or 3
+parallel lines according to an estimated bond order.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'AtomScale'}   & \code{0.35}             & Sphere radius as a fraction of the covalent radius \\
+\code{'BondTol'}     & \code{1.30}             & Bond tolerance: bonded if $d < (r_1+r_2)\times$\code{BondTol} \\
+\code{'ShowLabels'}  & \code{true}             & Show atom labels (\code{"C1"}, \code{"H2"}, ...) \\
+\code{'ShowLegend'}  & \code{true}             & Show the element-colour legend \\
+\code{'Title'}       & filename                & Figure title \\
+\code{'BgColor'}     & \code{[0.95 0.95 0.95]} & Axes background colour \\
+\code{'Ax'}          & (new figure)            & Draw into an existing axes handle \\
+\code{'ShowAxes'}    & \code{false}            & Draw a small Cartesian X/Y/Z reference triad, anchored at the lower-left-front corner of the plotted molecule \\
+\code{'AxesLength'}  & \code{[]}               & Length of the X/Y/Z arrows, in \AA\ (\code{[]} = auto, 20\% of the molecule's bounding-box diagonal) \\
+\code{'BondList'}    & \code{[]}               & $[N_\text{bonds}\times2]$ or $[N_\text{bonds}\times3]$ explicit atom-index pairs (optionally with a 3rd column giving a pre-computed bond order 1/2/3) to draw as bonds, bypassing the \code{BondTol} distance criterion (\code{[]} = auto-detect). Used by \code{G09\_animate\_mode}/\code{G16\_animate\_mode} to keep a fixed bond topology (and, with the 3rd column, a fixed bond order) across all frames of an animation \\
+\end{argtable}
+
+\begin{lstlisting}
+mol = G09_structure('zeatin.out');
+G09_draw_molecule(mol);
+G09_draw_molecule(mol, 'ShowLabels', false, 'AtomScale', 0.4);
+G09_draw_molecule(mol, 'ShowAxes', true);
+\end{lstlisting}
+
+\begin{tbnote}
+\textbf{Bond order (single/double/triple).} For C-C and C-O pairs, bond
+order is estimated purely from bond length (any other element pair,
+including C-N, is always drawn as a single bond) and rendered as 1/2/3
+parallel lines in the usual chemical-drawing convention --- a geometric
+estimate, not Gaussian's own bond-order analysis (e.g.\ Wiberg/NBO
+indices). For an actual bond order derived from Gaussian's own NBO
+analysis, see \code{G09\_nbo\_bonds}/\code{G16\_nbo\_bonds}
+(Section~\ref{sec:nbo-bonds-ref}). The C-C
+double/single threshold is deliberately set to
+1.36~\AA\ rather than the generic reference-length midpoint
+($\approx$1.44~\AA): symmetric aromatic rings have essentially equal C-C
+bond lengths ($\approx$1.39--1.40~\AA, with no real single/double
+alternation to recover from geometry alone), so the generic midpoint
+would classify every ring bond as double. With the adjusted threshold,
+aromatic rings are instead rendered as all-single --- a more honest
+depiction than an arbitrary alternating pattern, since the true bond
+order is $\approx$1.5 all the way around the ring.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Rendering NBO-derived bond orders.} \code{nbo\_bonds}'s output
+table can be fed straight into \code{draw\_molecule}'s \code{'BondList'}
+parameter (Section~\ref{sec:nbo-bonds-ref}), replacing the geometric
+estimate above with the real bond order from Gaussian's own NBO
+analysis:
+\begin{lstlisting}
+mol = G16_structure('molecule_nbo.out');
+bt  = G16_nbo_bonds('molecule_nbo.out');   % requires 'pop=nbo' in the source job
+
+bond_list = [bt.Atom1, bt.Atom2, double(bt.BondOrder)];
+G16_draw_molecule(mol, 'BondList', bond_list);
+\end{lstlisting}
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Why C-N is excluded.} C-N was classified by length in an earlier
+version of the toolbox, using the same kind of threshold as C-C/C-O.
+Unlike C-C, a single threshold cannot separate aromatic C-N (e.g.\
+pyridine rings, $\approx$1.34~\AA) from a genuine C=N: on asymmetric
+pyridine-like rings this produced one ring C-N bond rendered double and
+its chemically-equivalent neighbour rendered single, an inconsistent and
+misleading picture. C-N is therefore always drawn as a single bond,
+regardless of length.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bug fixed (2026-08-05): lighting not following interactive
+rotation.} The plot supports interactive rotation via \code{rotate3d}
+(drag with the mouse). \code{CAMLIGHT} only positions a light relative
+to the camera at the moment it is called --- MATLAB's own documentation
+is explicit about this: ``In order for a light created with CAMLIGHT to
+stay in a constant position relative to the camera, CAMLIGHT must be
+called whenever the camera is moved.'' \code{ROTATE3D} does not do this
+on its own, so previously the two lights stayed fixed in the axes'
+3-D world frame while the molecule rotated underneath them: after a
+large enough rotation (e.g.\ 180 degrees) the CPK spheres ended up lit
+from behind instead of from the viewer's side, losing the shading
+gradient that gives them their 3-D appearance and making them look
+flat/uniformly lit. Fixed by keeping a handle to both lights and
+assigning \code{rotate3d}'s \code{ActionPostCallback} property (not an
+event --- assigning it again simply replaces the previous callback, so
+repeated calls into the same figure, e.g.\ one \code{draw\_molecule}
+call per \code{animate\_mode} frame, do not accumulate callbacks) to
+reposition both lights via \code{CAMLIGHT} after every interactive
+rotation.
+\end{tbnote}
+
+No differences between the G09 and G16 versions beyond the input struct's
+origin.
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_draw\_mode / G16\_draw\_mode}
+
+\begin{lstlisting}
+G09_draw_mode(mol, nm, mode_idx)
+G09_draw_mode(mol, nm, mode_idx, 'Name', Value, ...)
+\end{lstlisting}
+
+Renders a single vibrational normal mode as displacement arrows over the
+CPK structure.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Scale'}      & \code{1.5}           & Arrow length scale \\
+\code{'ArrowColor'} & \code{[1 0.4 0.1]}   & Arrow colour \\
+\code{'AtomScale'}  & \code{0.35}          & CPK sphere scale factor \\
+\code{'BondTol'}    & \code{1.30}          & Bond detection tolerance \\
+\code{'ShowLabels'} & \code{false}         & Show atom index labels \\
+\code{'FlipSign'}   & \code{false}         & Invert all arrow directions \\
+\end{argtable}
+
+\begin{tbnote}
+\textbf{Why \code{'FlipSign'} exists.} Normal-mode eigenvectors have an
+arbitrary overall sign --- a mode and its 180\textdegree-phase-shifted twin
+are physically identical. If the arrows point opposite to GaussView's
+rendering for a given mode, set \code{'FlipSign', true} to flip them. This
+is purely cosmetic and has no effect on frequencies or intensities.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_modeViewer / G16\_modeViewer}
+
+\begin{lstlisting}
+G09_modeViewer(filename)
+G09_modeViewer(filename, 'Name', Value, ...)
+\end{lstlisting}
+
+Interactive selector GUI for browsing vibrational modes. Reads the
+structure and all normal modes via \code{G09\_structure}/\code{G09\_nmodes},
+then opens a window listing every mode (index, frequency, symmetry).
+Selecting an entry calls \code{G09\_draw\_mode} to render that mode in a new
+figure window; previously drawn mode figures stay open, so different modes
+(or render settings) can be compared side by side.
+
+\begin{tbnote}
+\textbf{Window controls:}
+\begin{itemize}[nosep]
+  \item \emph{Order by:} sort the mode list by mode number (default), IR
+        intensity, or Raman intensity (descending; only offered when Raman
+        data is present). The current selection is preserved across
+        reordering.
+  \item A text box to set a custom title on the current mode figure.
+  \item A control for every \code{G09\_draw\_mode} option (\code{Scale},
+        \code{ArrowColor}, \code{AtomScale}, \code{BondTol},
+        \code{ShowLabels}, \code{FlipSign}); changing any of them
+        immediately redraws the selected mode in a new figure. Arrow colour
+        can be set from a named preset (Orange/Red/Blue/Green/Black/
+        Magenta) or a custom colour.
+  \item A \emph{Save figure...} button exporting the target mode figure to
+        JPEG, EPS, or PDF (EPS/PDF as true vector graphics).
+  \item An \emph{Animate mode (MP4)...} button exporting an MP4 animation
+        of the currently selected mode via \code{G09\_animate\_mode}/
+        \code{G16\_animate\_mode}, using the current Scale/AtomScale/
+        BondTol/ShowLabels/FlipSign settings and, automatically, the
+        camera orientation of the currently displayed mode figure (a
+        manual rotation carries over into the animation).
+\end{itemize}
+Name-Value arguments passed to \code{G09\_modeViewer} pre-populate the
+corresponding option control(s), e.g.\ \code{G09\_modeViewer('file.log',
+'Scale', 2, 'ShowLabels', true)}.
+\end{tbnote}
+
+\begin{lstlisting}
+G09_modeViewer('V_E00t.out');
+G16_modeViewer('INDACO_E025_ppDP.LOG', 'Scale', 2, 'ShowLabels', true);
+\end{lstlisting}
+
+See also \code{G09\_structure}/\code{G16\_structure},
+\code{G09\_nmodes}/\code{G16\_nmodes}, \code{G09\_draw\_mode}/\code{G16\_draw\_mode},
+\code{G09\_animate\_mode}/\code{G16\_animate\_mode}.
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_animate\_mode / G16\_animate\_mode}
+
+\begin{lstlisting}
+outfile = G09_animate_mode(mol, nm, mode_idx)
+outfile = G09_animate_mode(mol, nm, mode_idx, 'Name', Value, ...)
+
+outfile = G16_animate_mode(mol, nm, mode_idx)
+\end{lstlisting}
+
+Exports an MP4 animation of a single vibrational mode: the molecule
+oscillates along the mode's displacement vector (equilibrium
+$\pm$~amplitude), in the style of GaussView's mode animations, and the
+result is saved via \code{VideoWriter} (\code{'MPEG-4'} profile). A figure
+window opens and animates live while the video is rendered; avoid
+interacting with it until the function returns.
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.6cm}{X}
+\code{'Filename'}       & \code{[]} (auto) & Output path; default \code{<source>\_mode<N>.mp4}, \code{.mp4} appended if missing \\
+\code{'Scale'}          & \code{1.5}    & Displacement amplitude scale, same meaning as \code{G09\_draw\_mode}/\code{G16\_draw\_mode}'s \code{'Scale'} \\
+\code{'FlipSign'}       & \code{false}  & Invert the displacement direction \\
+\code{'AtomScale'}      & \code{0.35}   & See \code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} \\
+\code{'BondTol'}        & \code{1.30}   & See \code{G09\_draw\_molecule}/\code{G16\_draw\_molecule}; also used to compute the fixed bond list (see below) \\
+\code{'ShowLabels'}     & \code{false}  & See \code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} \\
+\code{'FramesPerCycle'} & \code{30}     & Frames per oscillation period \\
+\code{'NCycles'}        & \code{2}      & Number of periods rendered \\
+\code{'FPS'}            & \code{20}     & Video frame rate \\
+\code{'View'}           & \code{[]}     & \code{[azimuth elevation]} in degrees, the starting camera orientation (\code{[]} = MATLAB's default 3D view, azimuth$=-37.5$, elevation$=30$). Pass the output of MATLAB's own \code{view(ax)} to match an already-rotated figure \\
+\code{'ShowWaitbar'}    & \code{true}   & Print rendering progress to the command window \\
+\code{'Crop'}           & \code{true}   & Tightly crop every frame around the molecule instead of writing the whole (mostly blank) figure window (see below) \\
+\code{'CropMargin'}     & \code{12}     & Blank margin kept around the molecule when \code{'Crop'} is true, in pixels \\
+\code{'ShowTitle'}      & \code{false}  & Draw the filename/mode/frequency title text in every frame. Left off by default so the title's own bounding box does not force a taller crop than the molecule itself needs \\
+\end{argtable}
+
+\begin{lstlisting}
+mol = G16_structure('V_E00t.out');
+nm  = G16_nmodes('V_E00t.out');
+G16_animate_mode(mol, nm, 70, 'Scale', 2, 'FPS', 25);
+\end{lstlisting}
+
+\begin{tbnote}
+\textbf{Fixed bond list and bond order.} Bonds (and their estimated order,
+1/2/3) are computed once from the \emph{equilibrium} geometry (via
+\code{G09\_get\_bond\_length}/\code{G16\_get\_bond\_length}, using
+\code{'BondTol'} as the tolerance) and passed to
+\code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} through its
+\code{'BondList'} parameter (atom-index pairs plus a 3rd bond-order
+column), instead of being re-detected from instantaneous inter-atomic
+distances on every frame. Without this, bonds would flicker in and out
+--- and double/triple bonds would flicker to/from single --- as
+oscillating atoms cross the relevant distance thresholds.
+
+\textbf{No graphical waitbar.} Rendering progress is printed to the
+command window rather than shown with MATLAB's \code{waitbar}: on some
+MATLAB versions, \code{waitbar} itself was found to error intermittently
+across many rapid updates (\code{"Not enough input arguments"} inside its
+own internal \code{title()} call).
+
+\textbf{Axes handling.} Each frame's axes are deleted and recreated
+(rather than cleared with \code{cla}) before redrawing: in this
+3D-plus-lighting configuration, \code{cla(ax)} was found to leave stale
+graphics objects behind, causing the exported video to show all frames
+superimposed instead of one at a time.
+
+\textbf{Frame cropping.} Without \code{'Crop'}, every frame is the full
+figure window (default MATLAB figure size), leaving most of it blank
+around the molecule. The crop rectangle is computed \emph{once}, from the
+two oscillation extremes (phase $+1$ and $-1$, which bound the whole
+animation), by finding the tight bounding box of non-background pixels
+and padding it by \code{'CropMargin'}; the same rectangle is then applied
+to every frame. Because the axis limits are already fixed across the
+whole animation (see above), this rectangle stays valid throughout the
+video without ever clipping an atom at any phase, typically reducing the
+frame area by 70--80\%.
+\end{tbnote}
+
+No differences between the G09 and G16 versions beyond the input structs'
+origin.
+
+See also \code{G09\_draw\_molecule}\slash\code{G16\_draw\_molecule},
+\code{G09\_draw\_mode}\slash\code{G16\_draw\_mode},
+\code{G09\_modeViewer}\slash\code{G16\_modeViewer},
+\code{G09\_get\_bond\_length}\slash\code{G16\_get\_bond\_length}.
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_draw\_deformation / G16\_draw\_deformation}
+
+\begin{lstlisting}
+G09_draw_deformation(mol1, mol2)
+G09_draw_deformation(mol1, mol2, 'Name', Value, ...)
+\end{lstlisting}
+
+Visualises the geometric deformation between two related structures of
+the \emph{same} molecule --- typically with vs without a small static
+electric field (finite-field NLO workflows), two conformers, or
+before/after optimisation --- by drawing an arrow from each atom's
+position in \code{mol1} to its position in \code{mol2}
+(\code{mol2.xyz - mol1.xyz}), the same displacement-arrow style
+\code{G09\_draw\_mode} uses for a normal mode, but here the actual
+geometric shift between two structures rather than a vibrational
+eigenvector. \code{mol1}/\code{mol2} can come from
+\code{G09\_structure}/\code{G16\_structure}, \code{G\_read\_structure\_file},
+or \code{G09\_fchk\_read}/\code{G16\_fchk\_read}'s \code{.mol} sub-struct
+--- same atom count and ordering required.
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.8cm}{X}
+\code{'Overlay'}        & \code{false}         & See "Two display modes" below \\
+\code{'Scale'}          & \code{1}             & Arrow length AND overlay-position multiplier, applied identically to both (see below) \\
+\code{'ArrowColor'}     & \code{[1 0.4 0.1]}   & Arrow colour (same default as \code{G09\_draw\_mode}) \\
+\code{'Overlay2Color'}  & \code{[0.75 0.1 0.1]}& Colour of \code{mol2}'s skeletal overlay when \code{'Overlay'} is true \\
+\code{'AtomScale'}      & \code{0.35}          & CPK sphere scale for \code{mol1} \\
+\code{'BondTol'}        & \code{1.30}          & Bond-detection tolerance, both structures \\
+\code{'ShowLabels'}     & \code{false}         & Show atom index labels on \code{mol1} \\
+\code{'ArrowThreshold'} & \code{0.05}          & Skip the arrow for atoms whose displacement is below this fraction of the single largest per-atom displacement \\
+\end{argtable}
+
+\subsubsection*{Two display modes}
+
+\begin{itemize}[nosep]
+  \item \textbf{\code{'Overlay', false}} (default): draws \code{mol1}
+        only, as a full CPK ball-and-stick model, with displacement
+        arrows.
+  \item \textbf{\code{'Overlay', true}}: ALSO draws \code{mol2} as a
+        simplified skeletal overlay (thin dashed lines + small dots, no
+        spheres) in \code{'Overlay2Color'}, so both ends of every arrow
+        are visually anchored to a real atom position instead of just an
+        arrowhead in empty space.
+\end{itemize}
+
+\begin{tbnote}
+\textbf{Console report.} Every call prints the largest single-atom
+displacement (with which atom) and the RMSD over all atoms, in
+\AA{} --- the numbers to look at before picking \code{'Scale'}: real
+deformations (e.g.\ field-induced) are often only $10^{-3}$--$10^{-2}$
+\AA, far too small to see at \code{Scale=1}.
+
+\textbf{Why \code{'Scale'} affects the overlay too.} The overlay is drawn
+at \code{mol1.xyz + Scale*(mol2.xyz - mol1.xyz)}, i.e.\ the SAME
+exaggerated position the arrows point to --- \emph{not} \code{mol2}'s true
+coordinates. At \code{Scale} $\neq 1$ (the normal case for these
+typically-tiny deformations), drawing the overlay at the true,
+unscaled position would leave it visually detached from the arrow tips,
+since the arrows themselves are drawn exaggerated. Bond connectivity for
+the overlay is still detected from \code{mol2}'s true, unscaled geometry
+(an exaggerated geometry at a large \code{Scale} is not a real molecular
+geometry and would misjudge bonding distances).
+\end{tbnote}
+
+\begin{lstlisting}
+mol1 = G16_structure('nofield.out');
+mol2 = G16_structure('field_x025.out');
+G16_draw_deformation(mol1, mol2, 'Scale', 200);
+G16_draw_deformation(mol1, mol2, 'Overlay', true, 'Scale', 200);
+\end{lstlisting}
+
+No differences between the G09 and G16 versions beyond which
+\code{draw\_molecule}/\code{get\_bond\_length} pair each calls internally.
+
+See also \code{G09\_draw\_molecule}\slash\code{G16\_draw\_molecule},
+\code{G09\_draw\_mode}\slash\code{G16\_draw\_mode},
+\code{G09\_get\_bond\_length}\slash\code{G16\_get\_bond\_length}.
+
+\newpage
+
+% =============================================================================
+\section{Orbital energy analysis}
+% =============================================================================
+\subsection{G09\_orbital\_energies / G16\_orbital\_energies}
+
+\begin{lstlisting}
+oe = G09_orbital_energies(filename)
+oe = G09_orbital_energies(filename, 'step', 'last')
+oe = G09_orbital_energies(filename, 'step', N)
+\end{lstlisting}
+
+Extracts molecular orbital energies (HOMO/LUMO and the full
+occupied/virtual spectrum) from a Gaussian 09/16 output file, by parsing the
+\code{"Alpha  occ. eigenvalues --"} / \code{"Alpha virt. eigenvalues --"}
+lines printed by Gaussian's population analysis (and the corresponding
+\code{"Beta"} lines for open-shell calculations). These blocks repeat once
+per SCF calculation in the file (e.g.\ once per optimisation step); the
+\code{'step'} option selects which block to report, consistently with
+\code{G09\_energy}/\code{G09\_structure}.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'step'} & \code{'last'} & Which eigenvalue block to use: \code{'first'}, \code{'last'}, or an integer index \\
+\end{argtable}
+
+\textbf{Output struct \code{oe}} (energies in Hartree unless noted):
+
+\begin{argtable}{Field}{Type}{Description}{2.8cm}{2.2cm}{X}
+\code{.alpha\_occ}  & vector & Occupied alpha orbital energies \\
+\code{.alpha\_virt} & vector & Virtual alpha orbital energies \\
+\code{.beta\_occ}   & vector & Occupied beta orbital energies (\code{[]} if closed-shell) \\
+\code{.beta\_virt}  & vector & Virtual beta orbital energies (\code{[]} if closed-shell) \\
+\code{.has\_beta}   & logical & \code{true} for open-shell (UHF/UKS) calculations \\
+\code{.HOMO} / \code{.LUMO} & double & Highest occupied / lowest unoccupied orbital energy \\
+\code{.gap}         & double & \code{LUMO -- HOMO} \\
+\code{.HOMO\_alpha} / \code{.LUMO\_alpha} & double & Alpha HOMO/LUMO (\code{== .HOMO}/\code{.LUMO} for closed-shell) \\
+\code{.HOMO\_beta} / \code{.LUMO\_beta} & double & Beta HOMO/LUMO (\code{[]} if closed-shell) \\
+\code{.HOMO\_eV} / \code{.LUMO\_eV} / \code{.gap\_eV} & double & Same three quantities, in eV \\
+\code{.step}    & int  & Block index actually used \\
+\code{.Nsteps}  & int  & Number of eigenvalue blocks found in the file \\
+\code{.filename} & char & Source file name \\
+\end{argtable}
+
+\begin{lstlisting}
+oe = G09_orbital_energies('V_E00t.out');
+fprintf('HOMO-LUMO gap = %.3f eV\n', oe.gap_eV);
+\end{lstlisting}
+
+\begin{tbnote}
+For open-shell (UHF/UKS) calculations, \code{HOMO} and \code{LUMO} are
+computed as $\max(\text{HOMO}_\alpha,\text{HOMO}_\beta)$ and
+$\min(\text{LUMO}_\alpha,\text{LUMO}_\beta)$ respectively, so \code{.gap}
+always refers to the smallest alpha/beta HOMO--LUMO gap. No differences
+between the G09 and G16 versions beyond the parsed file's origin.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_draw\_orbital / G16\_draw\_orbital}
+
+\begin{lstlisting}
+G09_draw_orbital(oe)
+G09_draw_orbital(oe, 'Name', Value, ...)
+\end{lstlisting}
+
+Draws a molecular-orbital energy-level diagram from the struct returned by
+\code{G09\_orbital\_energies}/\code{G16\_orbital\_energies}, showing a
+user-selected number of occupied/virtual levels around the frontier
+orbitals and highlighting the HOMO--LUMO transition with an arrow labelled
+with the gap value.
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{3.0cm}{X}
+\code{'NLevels'}     & \code{5}       & Number of occupied/virtual levels shown on each side of the frontier orbitals \\
+\code{'Units'}       & \code{'eV'}    & Energy units: \code{'eV'} or \code{'Hartree'} \\
+\code{'Ax'}          & (new figure)   & Draw into an existing axes handle \\
+\code{'OccColor'}    & \code{[0.25\ 0.25\ 0.70]} & Colour for non-frontier occupied levels \\
+\code{'VirtColor'}   & \code{[0.70\ 0.30\ 0.25]} & Colour for non-frontier virtual levels \\
+\code{'HOMOColor'}   & \code{[0.00\ 0.45\ 0.85]} & Highlight colour for the HOMO \\
+\code{'LUMOColor'}   & \code{[0.90\ 0.35\ 0.00]} & Highlight colour for the LUMO \\
+\code{'ArrowColor'}  & \code{[0.15\ 0.60\ 0.15]} & HOMO$\to$LUMO transition arrow colour \\
+\code{'ShowLabels'}  & \code{true}    & Annotate each level with its energy value \\
+\code{'ShowSpins'}   & \code{true}    & Draw a paired-electron arrow glyph ($\uparrow\downarrow$) on occupied levels \\
+\code{'FontSize'}    & \code{8}       & Font size for level energy-value labels \\
+\code{'FrontierFontSize'} & \code{13} & Font size for the HOMO/LUMO tags and the gap annotation \\
+\code{'ArrowHeadSize'}    & \code{0.2} & HOMO--LUMO arrow head size, as a fraction of the arrow length (passed to \texttt{quiver}) \\
+\code{'Title'}       & filename or \code{'Orbital Energy Diagram'} & Figure title \\
+\end{argtable}
+
+\begin{lstlisting}
+oe = G09_orbital_energies('a1.out');
+G09_draw_orbital(oe)
+G09_draw_orbital(oe, 'NLevels', 8, 'Units', 'Hartree')
+\end{lstlisting}
+
+\begin{tbnote}
+Requires the \code{oe} struct returned by \code{G09\_orbital\_energies}/
+\code{G16\_orbital\_energies} and errors if \code{alpha\_occ}/\code{alpha\_virt}
+are missing or empty. No differences between the G09 and G16 versions
+beyond the input struct's origin.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Response properties (G16 only)}
+% =============================================================================
+\subsection{G16\_hyperpolar}
+
+\begin{lstlisting}
+hp = G16_hyperpolar(filename)
+hp = G16_hyperpolar(filename, 'units', 'au')    % default
+hp = G16_hyperpolar(filename, 'units', 'esu')   % 10^-30 esu
+hp = G16_hyperpolar(filename, 'units', 'SI')    % 10^-50 C^3 m^3 J^-2
+\end{lstlisting}
+
+Extracts the dipole hyperpolarisability $\beta$ (static, dynamic, and
+vibrational contributions) from a Gaussian~16 output file.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'units'} & \code{'au'} & \code{'au'} \textbar\ \code{'esu'} ($10^{-30}$ esu) \textbar\ \code{'SI'} ($10^{-50}$ C$^3$m$^3$J$^{-2}$) \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.beta0.par\_z}, \code{.beta0.perp\_z} & Parallel / perpendicular component of static $\beta(0;0,0)$ along $z$ \\
+\code{.beta0.vec\_x/y/z}, \code{.beta0.beta\_vec} & Vector components and magnitude $|\beta_\text{vec}|$ \\
+\code{.beta0.tensor} & All Cartesian tensor components ($xxx,xxy,\ldots,zzz$) \\
+\code{.beta\_dyn} & Struct array, one entry per laser frequency: \code{.lambda\_nm}, \code{.par\_z}, \code{.perp\_z}, \code{.vec\_x/y/z}, \code{.beta\_vec}, \code{.tensor} \\
+\code{.N\_dyn} & Number of dynamic (laser) frequencies found \\
+\code{.beta\_vib}, \code{.has\_vib} & Diagonal vibrational hyperpolarisability, logical \\
+\code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+hp = G16_hyperpolar('V_E00t.out');
+hp.beta0.beta_vec          % static beta modulus, a.u.
+hp.beta_dyn(1).lambda_nm   % wavelength of the first dynamic entry (nm)
+hp.beta_dyn(1).beta_vec    % |beta| at that frequency
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G16\_tddft}
+
+\begin{lstlisting}
+td = G16_tddft(filename)
+td = G16_tddft(filename, 'nstates', N)     % first N states only
+td = G16_tddft(filename, 'plot', true)     % also generate UV-Vis plot
+td = G16_tddft(filename, 'FWHM_eV', 0.3)   % broadening FWHM (eV)
+\end{lstlisting}
+
+Extracts TD-DFT excited states and generates a Gaussian-broadened UV-Vis
+spectrum.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'nstates'} & \code{Inf}  & Load only the first $N$ excited states \\
+\code{'plot'}    & \code{false}& Generate the UV-Vis plot \\
+\code{'FWHM\_eV'}& \code{0.30} & Gaussian broadening FWHM (eV) \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.n}, \code{.mult} & State index; multiplicity label (e.g.\ \code{'Singlet-A'}, \code{'Triplet-B'}) \\
+\code{.eV}, \code{.nm}, \code{.f} & Excitation energy (eV), wavelength (nm), oscillator strength \\
+\code{.S2}, \code{.has\_S2} & $\langle S^2\rangle$ expectation value (0 for pure singlets), logical \\
+\code{.trans} & Cell array, one $[N_\text{contrib}\times3]$ matrix per state: columns \code{[MO\_from, MO\_to, coeff]} (\code{MO\_to}$<0$ denotes a de-excitation) \\
+\code{.Nstates} & Total number of excited states loaded \\
+\code{.x\_nm}, \code{.eps\_cont} & Wavelength grid (100--1000~nm), Gaussian-broadened UV-Vis spectrum (arb.\ units) \\
+\code{.FWHM\_eV}, \code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+td = G16_tddft('violacein_td.out');
+plot(td.x_nm, td.eps_cont)     % UV-Vis spectrum
+stem(td.nm, td.f)              % transition stem plot
+td.trans{2}                    % transitions contributing to the 2nd state
+\end{lstlisting}
+
+\begin{tbnote}
+No G09 equivalent is provided: TD-DFT excited-state analysis and
+hyperpolarisability response properties in this toolbox are currently
+supported only for Gaussian~16 output files.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Structural analysis utilities}
+% =============================================================================
+\subsection{G09\_get\_bond\_length / G16\_get\_bond\_length}
+
+\begin{lstlisting}
+bondTable = G09_get_bond_length(mol)
+bondTable = G09_get_bond_length(mol, 'Name', Value, ...)
+\end{lstlisting}
+
+Builds the bond-length table of a molecule from a \code{mol} struct (fields
+\code{.symbols}, \code{.xyz}), detecting bonds via a covalent-radius
+criterion, and returns a MATLAB \code{table}.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Tolerance'} & \code{1.15} & Multiplicative factor on the sum of covalent radii for the bonding criterion \\
+\code{'IncludeH'}  & \code{true} & Include bonds involving hydrogen atoms \\
+\code{'SortBy'}    & \code{'distance'} & Sort by \code{'distance'} (ascending) or \code{'atom'} (atom index) \\
+\code{'SaveAs'}    & \code{''}  & Path (\code{.xlsx} or \code{.csv}) to save the table to; not saved if omitted \\
+\end{argtable}
+
+Output columns: \code{Atom1}, \code{Sym1}, \code{Atom2}, \code{Sym2},
+\code{Distance\_Ang}.
+
+\begin{lstlisting}
+T = G09_get_bond_length(mol, 'SortBy', 'atom');
+T = G16_get_bond_length(mol, 'IncludeH', false, 'SaveAs', 'bonds.xlsx');
+\end{lstlisting}
+
+\begin{tbnote}
+The bonding criterion is purely geometric (covalent radii), not derived
+from Gaussian's own connectivity/topology matrix --- suitable for quick
+structural analysis, not as the "official" G09/G16 connectivity.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_nbo\_bonds / G16\_nbo\_bonds}
+\label{sec:nbo-bonds-ref}
+
+\begin{lstlisting}
+bt = G09_nbo_bonds(filename)
+bt = G09_nbo_bonds(filename, 'Name', Value, ...)
+\end{lstlisting}
+
+Determines bond order (single/double/triple) from an actual Gaussian NBO
+(Natural Bond Orbital) analysis, as opposed to \code{get\_bond\_length}'s
+geometric covalent-radius criterion or \code{draw\_molecule}'s bond-length
+heuristic. Reads the "Natural Bond Orbitals (Summary)" table and counts,
+for every atom pair, how many bonding (\code{BD}) natural bond orbitals
+NBO assigned to it: one \code{BD} orbital means a single bond (\(\sigma\)
+only), two mean a double bond (\(\sigma+\pi\)), three mean a triple bond
+(\(\sigma+2\pi\)). Antibonding (\code{BD*}) orbitals are excluded.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'section'} & \code{'last'} & Which "Natural Bond Orbitals (Summary)" block to read, for files with more than one (e.g.\ multi-step opt+freq+polar jobs that repeat the NBO analysis at each step); also accepts \code{'first'} \\
+\code{'Lines'}   & \code{\{\}}   & Pre-read cell array of file lines, to skip re-reading the file \\
+\end{argtable}
+
+Output columns: \code{Atom1}, \code{Sym1}, \code{Atom2}, \code{Sym2},
+\code{BondOrder}, \code{Occupancy} (summed NBO occupancy, \(\approx 2\)
+per \code{BD} orbital).
+
+\begin{lstlisting}
+bt = G09_nbo_bonds('CH4_NBO.LOG');
+\end{lstlisting}
+
+\begin{tbnote}
+Requires the source file to have been computed with the \code{pop=nbo}
+Gaussian keyword (or similar, e.g.\ \code{pop=(nbo,savenbo)}); without it,
+the output file simply does not contain NBO data and the function raises
+an error --- bond order cannot be recovered after the fact from
+geometry/energy alone. This reads the "Natural Bond Orbitals (Summary)"
+table that \code{pop=nbo} always prints, not the separate "Wiberg bond
+index matrix" (which additionally requires \code{pop=(nbo,bndidx)} and is
+not parsed by this function).
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_gaussian\_version / G16\_gaussian\_version}
+
+\begin{lstlisting}
+gv = G09_gaussian_version(filename)
+gv = G16_gaussian_version(filename)
+\end{lstlisting}
+
+Detects which Gaussian version/revision produced a
+\code{.out}/\code{.log}/\code{.fchk} file.
+
+\begin{tbnote}
+For \code{.out}/\code{.log} files, reads the \code{"Gaussian NN, Revision
+X.YY,"} citation line printed near the top of the file (works for any
+\code{NN}: 09, 16, \ldots). \code{.fchk} files do not store this
+information at all; in that case the function looks for a sibling
+\code{.log}/\code{.out} file with the same base name in the same folder
+and reads the version from there. If no sibling file is found,
+\code{.major}/\code{.revision}/\code{.full} are returned empty and a
+warning is issued.
+\end{tbnote}
+
+\begin{argtabletwo}{Field}{Description}{2.8cm}{X}
+\code{.major}    & Gaussian major version, e.g.\ 9, 16 (\code{[]} if unknown) \\
+\code{.revision} & Revision string, e.g.\ \code{'A.02'}, \code{'C.01'} (\code{''} if unknown) \\
+\code{.full}     & Citation line as printed, e.g.\ \code{'Gaussian 09, Revision A.02'} \\
+\code{.source}   & \code{'out/log'} \textbar\ \code{'fchk-sibling:<path>'} \textbar\ \code{'unknown'} \\
+\code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+gv = G09_gaussian_version('a1.out');        % gv.major = 16, gv.revision = 'C.01'
+gv = G16_gaussian_version('molecule.fchk'); % falls back to molecule.out/.log if present
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_restart / G16\_restart}
+
+\begin{lstlisting}
+gjf_file = G09_restart(filename)
+gjf_file = G09_restart(filename, 'Name', Value, ...)
+
+gjf_file = G16_restart(filename)
+gjf_file = G16_restart(filename, 'Name', Value, ...)
+\end{lstlisting}
+
+Generates a Gaussian 09/16 input file (\code{.gjf}) to restart a
+calculation from a geometry found in an existing \code{.log}/\code{.out}
+file. \code{G16\_restart} reads geometry via \code{G16\_structure} (so it
+follows that function's Standard/Input orientation handling); otherwise
+the two functions are identical.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{3.0cm}{X}
+\code{'step'}        & \code{'last'} & \code{'last'} \textbar\ \code{'first'} \textbar\ integer $N$ --- which geometry step to restart from \\
+\code{'output'}      & \code{<base>\_restarted.gjf} & Output \code{.gjf} path \\
+\code{'extra\_route'}& \code{''} & Additional keywords appended to the route section \\
+\code{'nproc'}       & \code{0}  & \code{\%nprocshared} override (\code{0} = keep/omit) \\
+\code{'mem'}         & \code{''} & \code{\%mem} override (\code{''} = keep/omit) \\
+\end{argtable}
+
+\begin{tbnote}
+If the source output file has no \code{\%chk} line (common in Gaussian~09
+Windows output), the checkpoint name is derived from the source file name
+instead. The generated \code{.gjf} is valid for restarting under either
+Gaussian 09 or Gaussian 16, and can be read back with \code{G\_read\_input}.
+\end{tbnote}
+
+Returns the path of the generated \code{.gjf} file.
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_available\_data / G16\_available\_data}
+\label{sec:available-data-ref}
+
+\begin{lstlisting}
+T = G09_available_data(filename)
+T = G16_available_data(filename)
+\end{lstlisting}
+
+Reads the route section (see \code{G09\_route}/\code{G16\_route}) and
+checks it against the keyword requirements documented in
+Section~\ref{sec:keyword-section-map} ("Which \code{.in} keywords
+generate which \code{.out} section"), so you can tell up front which
+data will actually be present in a file --- e.g.\ a TD-DFT-only single
+point job (\code{td=(singlets,nstates=100)}, no \code{freq}) has no
+vibrational normal modes, no IR/Raman spectra, and no thermochemistry
+(ZPE/H/G/S), so calling \code{nmodes}/\code{spectra} on it raises an
+error and \code{energy}'s \code{*\_corr}/\code{E0}/\code{U}/\code{H}/
+\code{G}/\code{T}/\code{P}/\code{S} fields come back \code{NaN} ---
+none of that is a bug, it is simply not in the file. This function lets
+you check that in one call, rather than discovering it one error/NaN at
+a time.
+
+\begin{argtabletwo}{Field}{Description}{2.4cm}{X}
+\code{.Function}  & Toolbox function/quantity name \\
+\code{.Available} & \code{logical} --- true if the route contains the keyword(s) needed \\
+\code{.Requires}  & Human-readable keyword requirement (e.g.\ \code{'freq'}, \code{'polar + cphf=rdfreq'}) \\
+\code{.Notes}     & Short clarifying note \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+G16_available_data('V_E00_R_24_TD.out');
+T = G16_available_data('molecule.out');
+T(~T.Available, :)   % see what's NOT available in this file
+\end{lstlisting}
+
+\begin{tbnote}
+This predicts availability from the route keywords alone; it does not
+itself read the data sections, so an incomplete/crashed job can still
+show a keyword as present without the corresponding output actually
+having been printed (the extraction function will still raise its own
+clear error in that case). \code{G09\_available\_data} omits the
+\code{hyperpolar}/\code{tddft} rows entirely, since those functions do
+not exist in the G09 toolbox.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G\_read\_input \normalfont{(shared, no G09\_/G16\_ prefix)}}
+
+\begin{lstlisting}
+ginp = G_read_input(filename)
+\end{lstlisting}
+
+Reads a Gaussian \emph{input} file (\code{.gjf}, \code{.com}, or
+\code{.in}) and extracts the link0 commands, route section, title,
+charge/multiplicity, and starting Cartesian geometry.
+
+\begin{tbnote}
+The Gaussian input file format does not differ between Gaussian~09 and
+Gaussian~16, so this is the toolbox's only function without a
+\code{G09\_}/\code{G16\_} prefix pair: an identical copy is kept in both
+the \code{G09/} and \code{G16/} folders, so it is available regardless of
+which toolbox you have on the MATLAB path. Only Cartesian-coordinate
+geometry blocks are supported (not Z-matrix input).
+\end{tbnote}
+
+\begin{argtable}{Field}{Type}{Description}{2.8cm}{2.2cm}{X}
+\code{.symbols}  & cell   & Atomic symbols \\
+\code{.xyz}      & double & Starting coordinates in \AA\ (X Y Z) \\
+\code{.Natoms}   & int    & Number of atoms \\
+\code{.charge}   & int    & Total molecular charge \\
+\code{.mult}     & int    & Spin multiplicity \\
+\code{.title}    & char   & Title/comment line(s), joined with a space \\
+\code{.route}    & char   & Full route section, single line \\
+\code{.method}   & char   & Method parsed from the route (e.g.\ \code{'b3lyp'}), \code{''} if not found \\
+\code{.basis}    & char   & Basis set parsed from the route (e.g.\ \code{'6-311+g(d,p)'}), \code{''} if not found \\
+\code{.chk}      & char   & \code{\%chk} link0 value, \code{''} if absent \\
+\code{.mem}      & char   & \code{\%mem} link0 value, \code{''} if absent \\
+\code{.nproc}    & char   & \code{\%nprocshared}/\code{\%nproc} link0 value, \code{''} if absent \\
+\code{.filename} & char   & Source file path \\
+\end{argtable}
+
+\begin{tbnote}
+\code{ginp} has the same \code{.symbols}/\code{.xyz}/\code{.Natoms}/
+\code{.filename} fields as the struct returned by
+\code{G09\_structure}/\code{G16\_structure}, so it can be passed directly
+to \code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} or
+\code{G09\_get\_bond\_length}/\code{G16\_get\_bond\_length} without any
+conversion.
+\end{tbnote}
+
+\begin{lstlisting}
+ginp = G_read_input('molecule.gjf');
+G16_draw_molecule(ginp, 'ShowAxes', true);
+fprintf('%s/%s, charge %d, mult %d\n', ginp.method, ginp.basis, ...
+    ginp.charge, ginp.mult);
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_list / G16\_list}
+
+\begin{lstlisting}
+G09_list()
+T = G09_list()
+
+G16_list()
+T = G16_list()
+\end{lstlisting}
+
+Lists every \code{G09\_*.m}/\code{G16\_*.m} function found in the toolbox
+folder, printing the function name and its H1 description line (sorted
+alphabetically). Also returns the same information as a \code{table} with
+columns \code{.Name}, \code{.Description}, \code{.File}.
+
+\begin{lstlisting}
+G09_list();
+T = G16_list();
+T(contains(T.Description, 'dipole', 'IgnoreCase', true), :)
+\end{lstlisting}
+
+\newpage
+
+% =============================================================================
+\section{One-call data extraction}
+% =============================================================================
+\subsection{G09\_read\_all / G16\_read\_all}
+
+\begin{lstlisting}
+T = G09_read_all(filename)
+T = G16_read_all(filename)
+\end{lstlisting}
+
+Runs the full set of \code{G09\_XXX}/\code{G16\_XXX} parsers on a single
+output file and collects the results into one struct \code{T}. The file is
+read from disk once and the resulting lines are passed to every
+sub-parser via their \code{'Lines'} option, instead of each sub-parser
+independently re-reading and re-splitting the file.
+
+\begin{argtable}{Field}{Source function}{Description}{2.8cm}{3.2cm}{X}
+\code{.charge}    & \code{G09/G16\_charges}       & Mulliken and APT atomic charges (plotting disabled) \\
+\code{.energy}    & \code{G09/G16\_energy}        & SCF energy and thermochemistry \\
+\code{.structure} & \code{G09/G16\_structure}     & Optimized molecular structure \\
+\code{.dipolar}   & \code{G09/G16\_dipole\_polar} & Dipole moment and polarisability \\
+\code{.nmodes}    & \code{G09/G16\_nmodes}        & IR/Raman vibrational normal modes; omitted (with a non-blocking warning) if the file has no frequency calculation --- check with \code{isfield(T, 'nmodes')} \\
+\code{.spectra}   & \code{G09/G16\_spectra}       & Frequencies, IR/Raman intensities, simulated spectra; omitted under the same condition as \code{.nmodes} \\
+\code{.route}     & \code{G16\_route} (G16 only)  & Gaussian route section details \\
+\code{.chargemol.charge}, \code{.chargemol.mol} & \code{G16\_charge\_mult} (G16 only) & Total molecular charge, spin multiplicity \\
+\end{argtable}
+
+\begin{lstlisting}
+T = G16_read_all('zeatin.out');
+disp(T.energy)
+G16_draw_molecule(T.structure);
+\end{lstlisting}
+
+\begin{tbnote}
+\textbf{Known discrepancy:} the current \code{G09\_read\_all} does
+\emph{not} populate \code{.route} or \code{.chargemol}, unlike
+\code{G16\_read\_all}, which retains both. If parity with \code{G16\_read\_all}
+is required, add
+\begin{lstlisting}
+T.route = G09_route(filename, 'Lines', lines);
+[c, m]  = G09_charge_mult(filename, 'Lines', lines);
+T.chargemol.charge = c;
+T.chargemol.mol    = m;
+\end{lstlisting}
+to \code{G09\_read\_all.m}.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bug fixed (2026-08-05):} \code{G09\_read\_all}/\code{G16\_read\_all}
+(and the Python \code{g16\_read\_all}) used to call \code{nmodes}/\code{spectra}
+unconditionally, so a job with no frequency calculation at all (e.g.\ a
+TD-DFT-only single point job, \code{td=(singlets,nstates=100)} with no
+\code{freq} keyword) crashed the \emph{entire} call, even though every
+other field (charges, energy, structure, dipole, route, charge/multiplicity)
+would have extracted perfectly fine. This directly contradicted
+\code{G09\_write\_report.m}/\code{G16\_write\_report.m} (and their Python
+counterpart), which already used \code{isfield}/\code{getattr} checks
+expecting \code{.nmodes}/\code{.spectra} to be \emph{optionally absent}.
+Fixed by wrapping just those two calls in \code{try}/\code{catch}: on
+failure the field is omitted entirely (not left as an empty placeholder)
+and a single non-blocking \code{warning(...)} explains why, restoring the
+graceful-degradation behaviour the rest of the toolbox already assumed.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_batch\_read\_all / G16\_batch\_read\_all}
+
+\begin{lstlisting}
+T = G09_batch_read_all(folder)
+T = G09_batch_read_all(folder, 'Recursive', true)
+T = G09_batch_read_all(folder, 'WriteReports', true)
+T = G09_batch_read_all(folder, 'SaveAs', 'summary.xlsx')
+
+T = G16_batch_read_all(folder)
+\end{lstlisting}
+
+Scans \code{folder} for \code{.log}/\code{.out} files (case-insensitive),
+runs \code{G09\_read\_all}/\code{G16\_read\_all} (plus
+\code{G09\_orbital\_energies}/\code{G16\_orbital\_energies}, for the
+HOMO-LUMO gap) on each, and returns one row per file --- useful for
+screening many calculations at once (conformers, scans, batches of jobs)
+without calling \code{read\_all} file-by-file.
+
+\begin{tbnote}
+A file that fails to parse (e.g.\ an incomplete/crashed job, or a file
+from the other Gaussian version run through the wrong toolbox) does
+\emph{not} stop the batch: its row is filled with \code{NaN} and the
+caught error message is recorded in the \code{.Status} column instead.
+\end{tbnote}
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.6cm}{X}
+\code{'Recursive'}    & \code{false} & Also scan subfolders \\
+\code{'WriteReports'} & \code{false} & Write a \code{G09\_write\_report}/\code{G16\_write\_report} \code{.txt} next to each source file \\
+\code{'SaveAs'}       & \code{''}    & Path to save the summary table (\code{.csv} or \code{.xlsx}, inferred from the extension) \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.0cm}{X}
+\code{.File}        & Source file path \\
+\code{.Natoms}      & Atom count (from \code{.structure.Natoms}) \\
+\code{.SCF\_Hartree}& SCF energy \\
+\code{.E0\_Hartree} & SCF + ZPE \\
+\code{.G\_kJmol}    & Gibbs free energy, kJ/mol \\
+\code{.mu\_tot}, \code{.mu\_units} & Dipole magnitude and its units \\
+\code{.HOMO\_eV}, \code{.LUMO\_eV}, \code{.Gap\_eV} & Frontier orbital energies and gap, eV \\
+\code{.Status}      & \code{'ok'}, or the caught error message if parsing failed \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+T = G16_batch_read_all('results/', 'WriteReports', true);
+T(T.Gap_eV == min(T.Gap_eV), :)   % smallest HOMO-LUMO gap
+\end{lstlisting}
+
+\newpage
+
+% =============================================================================
+\section{Report generation}
+% =============================================================================
+\subsection{G09\_write\_report / G16\_write\_report}
+
+\begin{lstlisting}
+outfile = G09_write_report(T)
+outfile = G09_write_report(T, outfile)
+
+outfile = G16_write_report(T)
+outfile = G16_write_report(T, outfile)
+\end{lstlisting}
+
+Writes a human-readable text report from a \code{G09\_read\_all}/
+\code{G16\_read\_all} struct \code{T}, formatting a summary of every field
+present in \code{T} into a plain \code{.txt} file. If \code{outfile} is
+omitted, the file is named after the source Gaussian file (e.g.\
+\code{'zeatin.out'} $\to$ \code{'zeatin\_report.txt'}) in the current
+folder.
+
+\begin{argtable}{Argument}{Default}{Description}{2.4cm}{2.8cm}{X}
+\code{T}       & (required)   & Struct returned by \code{G09\_read\_all}/\code{G16\_read\_all} \\
+\code{outfile} & \code{<source>\_report.txt} & Output \code{.txt} path \\
+\end{argtable}
+
+Returns the path written to. Sections are included only if the
+corresponding field is present in \code{T}, in this order: route,
+charge/multiplicity, molecular structure (full Cartesian coordinate
+table), energetics (with thermochemistry if available), dipole moment and
+polarisability (including the dynamic polarisability table, if present),
+atomic charges (full per-atom table, sum of charges, dipole-from-charges
+overlay if computed), vibrational normal modes (frequency/IR/Raman/reduced
+mass/symmetry table), and a summary of the simulated IR/Raman spectra.
+
+\begin{tbnote}
+The full broadened-spectrum continuum arrays (\code{T.spectra.x},
+\code{.IR\_cont}, \code{.Raman\_cont}) are deliberately \emph{not} dumped
+into the report --- only the grid range, FWHM, and whether Raman data is
+present are summarised. Access those arrays directly from \code{T.spectra}
+for plotting or export.
+\end{tbnote}
+
+\begin{lstlisting}
+T = G16_read_all('zeatin.out');
+G16_write_report(T);                        % -> zeatin_report.txt
+G16_write_report(T, 'zeatin_summary.txt');   % explicit output path
+\end{lstlisting}
+
+No differences between the G09 and G16 versions beyond the input struct's
+origin and the report header ("Gaussian 09"/"Gaussian 16 Calculation
+Report").
+
+See also \code{G09\_read\_all}/\code{G16\_read\_all}.
+
+\code{G16parser} is a Python~3 port of the G16 MATLAB toolbox, covering the
+same parsing, checkpoint-analysis, and static-visualisation functionality
+described in the previous sections. It is installable as a standard
+editable package and exposes one \code{g16\_xxx} function per MATLAB
+\code{G16\_xxx} counterpart, each returning a \code{Struct} object
+(attribute access, e.g.\ \code{mol.xyz}, \code{ch.dipole\_Debye}) instead
+of a MATLAB struct.
+
+\begin{lstlisting}
+cd G16parser
+pip install -e .
+\end{lstlisting}
+
+\begin{lstlisting}
+import G16parser as g16
+
+mol = g16.g16_structure('molecule.out')
+g16.g16_draw_molecule(mol, show_axes=True)
+
+ch = g16.g16_charges('molecule.out', show_dipole=True)
+
+oe = g16.g16_orbital_energies('molecule.out')
+g16.g16_draw_orbital(oe)
+
+T = g16.g16_read_all('molecule.out')   # everything in one call, single file read
+\end{lstlisting}
+
+\begin{tbnote}
+\textbf{Requirements:} Python~$\geq$3.9, \code{numpy}, \code{pandas},
+\code{matplotlib} (installed automatically via \code{pip install -e .}).
+No Gaussian installation or compiled dependency is needed.
+\end{tbnote}
+
+\subsection{Function reference}
+
+Every function mirrors its MATLAB \code{G16\_xxx} counterpart in name,
+parameters (in \code{snake\_case}), defaults, and returned fields --- see
+the corresponding MATLAB subsection earlier in this manual for full
+parameter/field documentation. All extraction functions accept an optional
+\code{lines=} parameter (pre-read file lines) mirroring the MATLAB
+\code{'Lines'} option; \code{g16\_read\_all} uses this internally to read
+the file exactly once.
+
+\begin{argtabletwo}{Function}{Description}{3.4cm}{X}
+\code{g16\_read\_input}       & Reads a Gaussian \emph{input} file (\code{.gjf}/\code{.com}/\code{.in}): link0 commands, route, title, charge/multiplicity, and starting geometry --- output \code{Struct} is compatible with \code{g16\_draw\_molecule}/\code{g16\_get\_bond\_length} \\
+\code{g16\_structure}         & Molecular geometry (\code{symbols}, \code{xyz} as \code{np.ndarray}, atom count) \\
+\code{g16\_energy}            & SCF energy and thermochemistry \\
+\code{g16\_convergence}       & Geometry-optimisation convergence criteria per step (\code{plot=True} for a matplotlib figure) \\
+\code{g16\_charges}           & Mulliken/APT atomic charges, optional dipole overlay and 3D plot \\
+\code{g16\_dipole\_polar}     & Dipole moment and (static/dynamic) polarisability \\
+\code{g16\_nmodes}            & Vibrational normal-mode displacement vectors \\
+\code{g16\_spectra}           & IR/Raman spectra (stick + Lorentzian-broadened continuum) \\
+\code{g16\_spectra\_nm}       & Same Lorentzian-broadened IR/Raman spectra as \code{g16\_spectra}, built directly from an already-parsed \code{nm} struct (from \code{g16\_nmodes}, or the \code{.nm} field of \code{g16\_fchk\_read}) --- no \code{.log}/\code{.out} file needed \\
+\code{g16\_orbital\_\discretionary{}{}{}energies} & HOMO/LUMO and the full occupied/virtual MO spectrum \\
+\code{g16\_charge\_mult}      & Molecular charge and spin multiplicity \\
+\code{g16\_route}             & Route section string \\
+\code{g16\_available\_data}   & Lists which toolbox quantities are expected to be extractable from a file, by checking its route keywords (e.g.\ ``no \code{freq} keyword $\to$ no nmodes/spectra/thermochemistry'') --- catches this before an error or a NaN \\
+\code{g16\_get\_\discretionary{}{}{}bond\_\discretionary{}{}{}length} & Bond-length table (pandas DataFrame) from covalent radii \\
+\code{g16\_nbo\_bonds}        & Bond order (single/double/triple) from an actual Gaussian NBO analysis (\code{pop=nbo}), by counting bonding (BD) natural bond orbitals per atom pair \\
+\code{g16\_fchk\_read}        & Reads a Gaussian formatted checkpoint (\code{.fchk}) file --- works on both G09 and G16 \code{.fchk} files, since the format does not depend on the Gaussian version \\
+\code{g16\_charges\_fchk}     & Visualises charges from a \code{g16\_fchk\_read} struct, without needing the corresponding \code{.log}/\code{.out} file \\
+\code{g16\_gaussian\_\discretionary{}{}{}version} & Detects the Gaussian version/revision (works on \code{.fchk} via a sibling \code{.log}/\code{.out}) \\
+\code{g16\_hyperpolar}        & Dipole hyperpolarisability ($\beta$) \\
+\code{g16\_tddft}             & TD-DFT excited states \\
+\code{g16\_read\_all}         & Runs the full extraction set in one call, reading the file only once \\
+\code{g16\_restart}           & Generates a \code{.gjf} restart input file from an existing output file \\
+\code{g16\_batch\_read\_all}  & Runs \code{g16\_read\_all} (+ \code{g16\_orbital\_energies}) over every \code{.log}/\code{.out} file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal \\
+\code{g16\_draw\_molecule}    & 3D CPK ball-and-stick render (matplotlib \code{mplot3d}) \\
+\code{g16\_draw\_mode}        & 3D structure with a vibrational mode's displacement arrows \\
+\code{g16\_draw\_orbital}     & Orbital energy-level diagram with HOMO--LUMO gap arrow \\
+\code{g16\_animate\_mode}     & Exports an MP4 animation of a vibrational mode (requires \code{ffmpeg} on \code{PATH}) \\
+\code{g16\_mode\_viewer}      & Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity, with an "Animate mode (MP4)..." button \\
+\code{g16\_list}              & Lists every function in the toolbox with its one-line description (pandas DataFrame) \\
+\code{g16\_write\_report}     & Writes a human-readable \code{.txt} summary report from a \code{g16\_read\_all} Struct \\
+\end{argtabletwo}
+
+\subsection{Selected signatures}
+
+\begin{lstlisting}
+g16_read_input(filename)
+g16_available_data(filename)
+g16_structure(filename, orientation="auto", step="last", lines=None)
+g16_energy(filename, step="last", lines=None)
+g16_convergence(filename, plot=False, lines=None)
+g16_nmodes(filename, section="last", modes=None, lines=None)
+g16_spectra(filename, FWHM=10, xmin=0, xmax=4000, dx=1, normalize=False,
+            plot=False, section="last", lines=None)
+g16_spectra_nm(nm, FWHM=10, xmin=0, xmax=4000, dx=1, normalize=False, plot=False)
+g16_charges(filename, type="Mulliken", mode="atom", plot=True,
+            atom_scale=0.35, bond_tol=1.30, bond_list=None, font_size=8,
+            color_scale="RdBu",
+            threshold=0.0, show_dipole=False, dipole_origin="negcharge",
+            dipole_scale=1.0, dipole_color=(0, 0.6, 0), dipole_line_width=2.5,
+            show_dipole_label=True, dipole_font_size=11, dipole_units="Debye",
+            lines=None)
+g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
+                  show_legend=True, title="", bg_color=(0.95, 0.95, 0.95),
+                  ax=None, show_axes=False, axes_length=None, bond_list=None)
+g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=False,
+                 atom_scale=0.35, bond_tol=1.30, show_labels=False,
+                 frames_per_cycle=30, n_cycles=2, fps=20, view=None)
+g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
+                show_labels=False, flip_sign=False, arrow_color=None,
+                font_size=10, **extra_opts)
+g16_get_bond_length(mol, tolerance=1.15, include_h=True,
+                    sort_by="distance", save_as="")
+g16_nbo_bonds(filename, section="last", lines=None)
+g16_fchk_read(filename, verbose=True)
+g16_charges_fchk(mol, ch, mode="atom", plot=True, atom_scale=0.35,
+                 bond_tol=1.30, font_size=8, color_scale="RdBu", threshold=0.0)
+g16_hyperpolar(filename, units="au", lines=None)
+g16_tddft(filename, nstates=math.inf, plot=False, fwhm_ev=0.30, lines=None)
+g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem="")
+g16_batch_read_all(folder, recursive=False, write_reports=False, save_as="")
+g16_write_report(T, outfile=None)
+\end{lstlisting}
+
+\subsection{Notes on the port}
+
+\begin{tbnote}
+\textbf{Test suite.} A \code{pytest} suite lives in \code{G16parser/tests/}
+(\code{pip install -e ".[test]"} then \code{pytest} from the
+\code{G16parser/} folder). Most tests need one real Gaussian~16
+\code{.out}/\code{.log} file dropped into \code{tests/fixtures/} (any
+filename); without one, those tests are skipped rather than failed, so
+the suite stays runnable out of the box. \code{tests/fixtures/water.gjf}
+is a small hand-written synthetic input file (not from a real
+calculation) used for the \code{g16\_read\_input} tests, which do not
+depend on the optional real-output fixture.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Continuous integration.} The test suite runs automatically on
+every push/pull request to \code{main} via GitHub Actions
+(\code{.github/workflows/python-tests.yml}), against Python 3.9 and
+3.12 on Ubuntu. Coverage is Python-only: running the MATLAB
+\code{G09\_*.m}/\code{G16\_*.m} functions in CI would additionally
+require a valid MATLAB licence (MathWorks' \code{matlab-actions/setup-matlab}
+GitHub Action needs one even for public repositories), so the MATLAB
+side of the toolbox continues to be verified manually.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{3D interactivity.} matplotlib's \code{mplot3d} has no MATLAB-style
+\code{rotate3d} widget; use the interactive backend's normal mouse/toolbar
+controls instead.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Naming exception: \code{g16\_read\_input}.} On the MATLAB side this
+function has no version prefix at all (\code{G\_read\_input}, identical
+copies in both the \code{G09/} and \code{G16/} folders) because the
+Gaussian input file format does not differ between versions. Since only a
+\code{G16parser} Python package exists (there is no separate
+\code{G09parser}), the port simply follows this package's \code{g16\_}
+naming convention like every other function here.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_restart} and \textbf{g16\_batch\_read\_all} port
+\code{G16\_restart.m} and \code{G16\_batch\_read\_all.m} only --- there is
+no Python equivalent of \code{G09\_restart.m}/\code{G09\_batch\_read\_all.m},
+consistent with every other G09-only MATLAB function (e.g.\
+\code{G09\_read\_lines}, an internal helper with no G16 counterpart since
+\code{G16\_*.m} functions inline the equivalent file-reading logic
+instead), since this package only targets Gaussian 16 output. Note that
+\code{G09\_fchk\_read}/\code{G09\_charges\_fchk} are \emph{not} G09-only
+despite the prefix (identical \code{G16\_} counterparts exist, since the
+\code{.fchk} format itself does not depend on the Gaussian version) --
+they are simply not yet ported to Python either.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Backend selection.} The package forces the \code{TkAgg} matplotlib
+backend (if Tk is available and \code{pyplot} has not been imported yet)
+instead of the native macOS backend: on some older matplotlib releases,
+interactively rotating a 3D plot with the native Cocoa backend can segfault
+the whole Python process. Call \code{matplotlib.use(...)} yourself
+\emph{before} importing \code{G16parser} if a different backend is needed.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bug found during porting, MATLAB-side only (fixed 2026-07-13):}
+in an early version of \code{G16\_tddft.m}, MATLAB's \code{regexp} silently
+dropped the optional trailing \code{<S**2>=} capture group even when it
+matched (a MATLAB-specific regex-engine quirk), so \code{td.S2} was always
+\code{NaN} in MATLAB even when the tag was present in the file. This
+Python port's \code{re}-based parser never shared that bug. Rather than
+leaving this as a permanent discrepancy between the two implementations,
+the MATLAB-side parser was fixed to extract \code{<S**2>=} with its own
+independent \code{regexp} call, instead of a trailing optional group;
+both implementations now agree.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bug found during porting, MATLAB-side only (fixed 2026-08-03):}
+the IR/Raman intensity calculation in \code{G09\_fchk\_read.m}/
+\code{G16\_fchk\_read.m} re-reshaped the already-correctly-shaped dipole/
+polarisability derivative matrices a second time
+(\code{reshape(dip\_deriv, N3, 3)'}) before use. Since MATLAB's
+\code{reshape} reinterprets the same column-major buffer under the new
+shape rather than transposing back to the original layout, this silently
+scrambled which derivative value belonged to which atom/displacement,
+producing plausible-looking but wrong \code{nm.IR}/\code{nm.Raman}
+values --- caught by comparing a \code{.fchk}-derived spectrum against
+the same molecule's IR/Raman as printed directly by Gaussian in the
+corresponding \code{.out} file. Fixed in both MATLAB files by using the
+matrices directly (no second reshape needed). This Python port's
+\code{g16\_fchk\_read} never had the bug (written directly with the
+correct indexing) --- verified to match the \code{.out}-printed values,
+and a regression test (\code{test\_fchk\_ir\_raman\_matches\_out\_ground\_truth})
+now guards against it ever being reintroduced.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_spectra\_nm} ports \code{G\_spectra\_nm.m}
+(Section~\ref{sec:spectra-nm-ref}), a genuinely version-agnostic MATLAB
+function (no \code{G09\_}/\code{G16\_} prefix, like \code{G\_read\_input}):
+it builds the same Lorentzian-broadened IR/Raman continuum as
+\code{g16\_spectra}, but directly from an already-parsed \code{nm} Struct
+(from \code{g16\_nmodes}, or the \code{.nm} field of
+\code{g16\_fchk\_read}) instead of reading a \code{.log}/\code{.out}
+file --- useful when only a \code{.fchk} file is available. Verified to
+match \code{g16\_spectra} called directly on the corresponding
+\code{.out} file for the same molecule.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_available\_data} ports \code{G09\_available\_data.m}/
+\code{G16\_available\_data.m} (Section~\ref{sec:available-data-ref}).
+Unlike the MATLAB \code{G09\_} version, it never omits the
+\code{hyperpolar}/\code{tddft} rows, since this package only targets
+Gaussian 16 output and both functions always exist here.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bug fixed (2026-08-05), both MATLAB and Python:} \code{g16\_read\_all}
+(and \code{G09\_read\_all.m}/\code{G16\_read\_all.m}) used to call
+\code{g16\_nmodes}/\code{g16\_spectra} unconditionally, so a file with no
+frequency calculation at all (e.g.\ a TD-DFT-only single point job) raised
+\code{ValueError} and crashed the entire call, even though every other
+field would have extracted fine. Fixed by wrapping just those two calls
+in \code{try}/\code{except}: on failure, \code{nmodes}/\code{spectra} are
+set to \code{None} (checked via \code{getattr(T, "nmodes", None)}, matching
+how \code{g16\_write\_report} already consumed them) and a single
+\code{warnings.warn(...)} explains why.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_mode\_viewer} is a Tkinter rewrite of \code{G16\_modeViewer.m}'s
+\code{uifigure} GUI, with the same controls (mode selector, order-by,
+per-option redraw, title, save-as PDF/EPS/JPEG, and an "Animate mode
+(MP4)..." button wired to \code{g16\_animate\_mode}, using the current
+option values and the displayed mode figure's camera orientation). One
+simplification: ``target figure'' always means the most recently drawn
+mode window, not whichever window the user last clicked on (MATLAB's
+\code{groot().CurrentFigure} has no simple Tkinter equivalent). In an
+IPython/Spyder console with the Tk graphics backend active, the viewer
+detects the running event loop and returns to the prompt immediately
+instead of blocking; run as a plain script, it blocks until the viewer
+window is closed.
+
+\textbf{Known issue:} \code{g16\_mode\_viewer} can segfault when run from
+\emph{inside} Spyder's IPython console (a crash inside ipykernel's own
+periodic Tk event-loop pump, not in this toolbox's code) --- confirmed
+working correctly when run from a plain terminal/script instead:
+\begin{lstlisting}
+python3 -c "import G16parser as g16; g16.g16_mode_viewer('file.out')"
+\end{lstlisting}
+All other functions, including static plots, work fine inside Spyder.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_animate\_mode} mirrors \code{G09\_animate\_mode.m}/
+\code{G16\_animate\_mode.m}: it oscillates the molecule along the mode's
+displacement vector and saves an MP4 via
+\code{matplotlib.animation.FuncAnimation} with \code{FFMpegWriter}.
+\textbf{Requires \code{ffmpeg} installed and on \code{PATH}}
+(\code{brew install ffmpeg} on macOS, \code{sudo apt install ffmpeg} on
+Ubuntu/Debian) --- matplotlib does not bundle a video encoder itself;
+without it the call fails with \code{FileNotFoundError: ... 'ffmpeg'} at
+the final encoding step (frame generation itself does not need ffmpeg).
+Bonds are computed once from the equilibrium geometry via
+\code{g16\_get\_bond\_length} and passed to \code{g16\_draw\_molecule}
+through its \code{bond\_list} parameter, so they stay fixed across all
+frames instead of flickering as instantaneous distances cross
+\code{bond\_tol}. By default the animation uses matplotlib's default 3D
+view; pass \code{view=(ax.azim, ax.elev)} to start from an
+already-rotated figure's orientation instead.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{g16\_write\_report} takes the \code{Struct} returned by
+\code{g16\_read\_all} and writes the same section-by-section plain-text
+report as \code{G09\_write\_report.m}/\code{G16\_write\_report.m}
+(route, charge/multiplicity, structure, energetics, dipole/polarisability,
+atomic charges, normal modes, spectra summary), using Python
+\code{getattr}-based field checks so that sections are included only when
+present, exactly mirroring the MATLAB \code{isfield} logic.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Bond order (single/double/triple).} \code{g16\_draw\_molecule}
+mirrors \code{G09\_draw\_molecule.m}/\code{G16\_draw\_molecule.m}: for
+C-C and C-O pairs, bond order is estimated purely from bond length (any
+other element pair, including C-N, is always drawn as a single bond)
+and rendered as 1/2/3 parallel lines. This is a geometric estimate, not
+Gaussian's own bond-order analysis (e.g.\ Wiberg/NBO indices). For an
+actual bond order derived from Gaussian's own NBO analysis, use
+\code{g16\_nbo\_bonds} (Section~\ref{sec:nbo-bonds-ref}). The \code{bond\_list}
+parameter accepts an optional 3rd column with a pre-computed order, used
+by \code{g16\_animate\_mode} (via \code{g16\_get\_bond\_length}) to keep
+both bond topology and bond order fixed across all animation frames:
+\begin{lstlisting}
+mol = g16.g16_structure('molecule_nbo.out')
+bt  = g16.g16_nbo_bonds('molecule_nbo.out')   # requires 'pop=nbo' in the source job
+
+bond_list = bt[['Atom1', 'Atom2', 'BondOrder']].to_numpy()
+bond_list[:, :2] -= 1   # g16_nbo_bonds uses 1-based Gaussian atom numbers;
+                        # g16_draw_molecule's bond_list is 0-based
+g16.g16_draw_molecule(mol, bond_list=bond_list)
+\end{lstlisting}
+\code{g16\_charges} accepts the same \code{bond\_list=} parameter,
+passed straight through to its internal \code{g16\_draw\_molecule} call:
+\begin{lstlisting}
+g16.g16_charges('molecule_nbo.out', bond_list=bond_list, show_dipole=True)
+\end{lstlisting}
+The C-C double/single threshold is set to 1.36~\AA\ rather than the generic
+reference-length midpoint, so symmetric aromatic rings (C-C
+$\approx$1.39--1.40~\AA, no real length alternation) render as
+all-single instead of all-double. C-N is deliberately excluded from
+length-based classification: on asymmetric pyridine-like rings a single
+threshold produced one ring C-N bond rendered double and its
+chemically-equivalent neighbour rendered single --- see the MATLAB
+\code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} subsection earlier
+in this manual for the full rationale.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
+\section{Worked examples}
+% =============================================================================
+Four self-contained scripts in \code{G16/} (\code{example\_1.m},
+\code{example\_2.m}, \code{example\_3.m}, \code{example\_4.m})
+demonstrate the toolbox end to end on a single real DFT calculation:
+\code{test\_2.out}, a geometry optimisation of Violacein (G.~Cassone et
+al., \emph{Phys. Chem. Chem. Phys.}, doi: 10.1039/d6cp01164k). Each
+script only needs \code{G16/} on the MATLAB path and \code{test\_2.out}
+in the current folder.
+
+\subsection{example\_1.m --- Structure, vibrational mode, and charges}
+
+Covers \code{G16\_structure}/\code{G16\_draw\_molecule} (3D structure
+rendering), \code{G16\_nmodes}/\code{G16\_draw\_mode} (a single
+vibrational mode, \#91, the main C=C stretch), and \code{G16\_charges}
+(Mulliken charges with a dipole moment overlay), all rendered from the
+same camera angle and each exported to its own PDF.
+
+\begin{lstlisting}
+%% G16 Toolbox -- Example #1: structure, vibrational mode, and charges
+%
+%   Demonstrates three core G16_*.m functions on a real DFT calculation:
+%     1) G16_structure  + G16_draw_molecule  -- 3D structure rendering
+%     2) G16_nmodes     + G16_draw_mode      -- a single vibrational mode
+%     3) G16_charges                         -- Mulliken charges + dipole
+%
+%   Data file: test_2.out -- DFT geometry optimisation of Violacein.
+%   Reference: G. Cassone et al., Phys. Chem. Chem. Phys.,
+%              doi: 10.1039/d6cp01164k
+%
+%   Requirements: G16/ on the MATLAB path, test_2.out in the current
+%   folder. Running this script creates three PDFs in the current
+%   folder: test_2_mol.pdf, test_2_mode_91.pdf, test_2_charges.pdf.
+
+clear
+close all
+clc
+
+filename = 'test_2.out';
+
+% Camera orientation shared by all three figures below, so the molecule
+% is viewed from the same angle in every plot.
+view_az = -16.4417;
+view_el =  44.0197;
+
+%% 1) Structure -- load the optimised geometry and render it in 3D
+mol = G16_structure(filename);
+
+% Create the axes up front so it can be tweaked (view angle, export)
+% after G16_draw_molecule has finished drawing into it.
+ax1 = axes;
+set(ax1, 'Visible', 'off');
+G16_draw_molecule(mol, 'Title', 'Violacein', 'Ax', ax1);
+set(ax1, 'View', [view_az, view_el]);
+
+% ContentType 'vector' gives a crisp publication figure but is slow for
+% a molecule this size; use 'image' instead for a quick low-effort preview.
+exportgraphics(ax1, 'test_2_mol.pdf', 'ContentType', 'vector');
+
+%% 2) Vibrational mode -- mode #91 is the main C=C stretch
+nm = G16_nmodes(filename);
+
+ax2 = axes;
+set(ax2, 'Visible', 'off');
+G16_draw_mode(mol, nm, 91);
+set(ax2, 'View', [view_az, view_el]);
+
+% Replace only the molecule-name line of the auto-generated two-line
+% title; the second line (mode number, frequency, IR/Raman intensity)
+% is left untouched.
+t = get(gca, 'Title');
+t.String(1) = {'Violacein'};
+set(gca, 'Title', t);
+
+exportgraphics(gca, 'test_2_mode_91.pdf', 'ContentType', 'vector');
+
+%% 3) Atomic charges -- Mulliken charges with a dipole moment overlay
+G16_charges(filename, 'Plot', true, 'ShowDipole', true);
+set(gca, 'View', [view_az, view_el]);
+
+t = get(gca, 'Title');
+t.String = {'Violacein - Mulliken Charges (atom)'};
+set(gca, 'Title', t);
+
+exportgraphics(gca, 'test_2_charges.pdf', 'ContentType', 'vector');
+
+fprintf('\nDone. Figures: structure, mode 91, Mulliken charges.\n');
+fprintf('Saved: test_2_mol.pdf, test_2_mode_91.pdf, test_2_charges.pdf\n');
+\end{lstlisting}
+
+\subsection{example\_2.m --- Infrared and Raman spectra}
+
+Demonstrates \code{G16\_spectra} two ways: a manual plot built directly
+from its raw \code{sp.x}/\code{sp.Raman\_cont} output fields, and the
+function's own built-in two-panel Raman+IR auto-plot (\code{'plot',
+true}), restyled afterwards with larger, bold axis labels for a
+print-ready figure. Both are exported to PDF.
+
+\begin{lstlisting}
+%% G16 Toolbox -- Example #2: Infrared and Raman spectra
+%
+%   Demonstrates G16_spectra on a real DFT calculation, two ways:
+%     1) Manual plot -- build a single Raman continuum plot directly
+%        from the raw sp.x/sp.Raman_cont fields returned by G16_spectra.
+%     2) Built-in plot -- let G16_spectra draw its own two-panel
+%        Raman+IR figure ('plot', true), then restyle the axes/labels
+%        afterwards (larger, bold text) for a print-ready figure.
+%
+%   Data file: test_2.out -- DFT geometry optimisation of Violacein.
+%   Reference: G. Cassone et al., Phys. Chem. Chem. Phys.,
+%              doi: 10.1039/d6cp01164k
+%
+%   Requirements: G16/ on the MATLAB path, test_2.out in the current
+%   folder. Running this script creates two PDFs in the current
+%   folder: test_2_raman_manual.pdf, test_2_ir_raman.pdf.
+
+clear; close all; clc
+filename = 'test_2.out';
+%% 1) Manual plot -- Raman continuum only, from the raw sp fields
+sp = G16_spectra(filename);
+fig1 = figure('Color', 'white');
+plot(sp.x, sp.Raman_cont, 'LineWidth', 2);
+xlabel('Wavenumber (cm^{-1})', 'FontWeight', 'bold');
+ylabel('Raman activity (A^4 AMU^{-1})', 'FontWeight', 'bold');
+set(gca, 'FontSize', 12);
+exportgraphics(fig1, 'test_2_raman_manual.pdf', 'ContentType', 'vector');
+%% 2) Built-in two-panel plot (Raman + IR), then restyled
+% 'FWHM' broadens the Lorentzian lines and 'xmin' crops the noisy
+% low-frequency tail; 'plot', true triggers G16_spectra's own
+% two-subplot Raman/IR figure (see G16_plot_spectra, local to
+% G16_spectra.m).
+G16_spectra(filename, 'FWHM', 15, 'xmin', 400, 'plot', true);
+fig2 = gcf;
+% G16_spectra creates the Raman axes first, then the IR axes below it;
+% findobj returns them in reverse creation order, so flip to restore
+% [Raman; IR].
+axs      = flipud(findobj(fig2, 'Type', 'axes'));
+ax_raman = axs(1);
+ax_ir    = axs(2);
+% Upsize the auto-generated labels (FontSize 10, regular weight) to a
+% bolder, larger style for a print-ready figure.
+set([ax_raman, ax_ir], 'FontSize', 12);
+xlabel(ax_raman, 'Wavenumber (cm^{-1})',         'FontWeight', 'bold', 'FontSize', 12);
+ylabel(ax_raman, 'Raman activity (A^4 AMU^{-1})', 'FontWeight', 'bold', 'FontSize', 12);
+xlabel(ax_ir,    'Wavenumber (cm^{-1})',         'FontWeight', 'bold', 'FontSize', 12);
+ylabel(ax_ir,    'IR intensity (KM mol^{-1})',    'FontWeight', 'bold', 'FontSize', 12);
+exportgraphics(fig2, 'test_2_ir_raman.pdf', 'ContentType', 'vector');
+fprintf('\nDone. Figures: manual Raman plot, built-in IR+Raman plot.\n');
+fprintf('Saved: test_2_raman_manual.pdf, test_2_ir_raman.pdf\n');
+\end{lstlisting}
+
+\subsection{example\_3.m --- Energetics}
+
+Demonstrates \code{G16\_orbital\_energies}, \code{G16\_energy}, and
+\code{G16\_convergence}, renders the HOMO-LUMO diagram via
+\code{G16\_draw\_orbital}, and combines all three structs into a
+one-line summary --- a small-scale taste of what
+\code{G16\_read\_all}/\code{G16\_write\_report} do at full scale across
+every extraction function.
+
+\begin{lstlisting}
+%% G16 Toolbox -- Example #3: Energetics
+%
+%   Demonstrates G16_orbital_energies, G16_energy, and G16_convergence
+%   on a real DFT calculation, then combines their results into a
+%   one-line summary -- a small taste of what G16_read_all/
+%   G16_write_report do at full scale across every extraction function.
+%   Also renders the HOMO-LUMO diagram via G16_draw_orbital.
+%
+%   Data file: test_2.out -- DFT geometry optimisation of Violacein.
+%   Reference: G. Cassone et al., Phys. Chem. Chem. Phys.,
+%              doi: 10.1039/d6cp01164k
+%
+%   Requirements: G16/ on the MATLAB path, test_2.out in the current
+%   folder. Each function already prints its own formatted summary to
+%   the command window (shown below as a reference for what to expect
+%   on this file); this script does not repeat those printouts. Running
+%   it creates test_2_orbital_diagram.pdf in the current folder.
+
+clear; close all; clc
+filename = 'test_2.out';
+%% 1) HOMO-LUMO gap -- detailed data in the oe structure
+oe = G16_orbital_energies(filename);
+% Console output for this file:
+%   -- G16_orbital_energies (step 3/3): test_2.out --
+%     HOMO = -0.190210 Ha  (-5.1759 eV)
+%     LUMO = -0.096890 Ha  (-2.6365 eV)
+%     Gap  =  0.093320 Ha  ( 2.5394 eV)
+
+% Orbital energy-level diagram (title defaults to the source filename)
+G16_draw_orbital(oe);
+exportgraphics(gcf, 'test_2_orbital_diagram.pdf', 'ContentType', 'vector');
+%% 2) Energy and thermochemistry -- detailed data in the en structure
+en = G16_energy(filename);
+% Console output for this file:
+%   -- G16_energy: test_2.out --
+%     Method : RB3LYP
+%     SCF    : -1160.20276011  Ha
+%     ZPE    : +0.29182000  Ha   (766.17 kJ/mol)
+%     E0+ZPE : -1159.91094000  Ha
+%     H      : -1159.88988100  Ha
+%     G      : -1159.96045200  Ha
+%     S      :  621.4460  J/(mol.K)
+%     T = 298.15 K,  P = 1.00000 atm
+
+%% 3) Geometry-optimisation convergence -- detailed data in the cv structure
+cv = G16_convergence(filename);
+% Console output for this file:
+%   G16_convergence: test_2.out
+%     Steps read  : 11
+%     Converged   : YES  (step 10)
+%     Last step   : MaxF=1.00e-06 (thr 1.50e-05)  RMSF=0.00e+00 (thr 1.00e-05)
+%                   MaxD=1.24e-04 (thr 6.00e-05)  RMSD=2.50e-05 (thr 4.00e-05)
+
+%% 4) Combine all three into a one-line summary
+if cv.converged
+    conv_label = sprintf('YES (step %d/%d)', cv.conv_step, cv.Nsteps);
+else
+    conv_label = sprintf('NO (%d steps read)', cv.Nsteps);
+end
+fprintf('\nSummary for %s:\n', filename);
+fprintf('  HOMO-LUMO gap : %.3f eV\n', oe.gap_eV);
+if en.has_thermo
+    fprintf('  Gibbs energy  : %.2f kJ/mol\n', en.G_kJ);
+else
+    fprintf('  Gibbs energy  : n/a (no frequency/thermochemistry job)\n');
+end
+fprintf('  Converged     : %s\n', conv_label);
+\end{lstlisting}
+
+\subsection{example\_4.m --- Recovering and restyling graphics handles}
+
+Shows how to reach back into a figure already drawn by
+\code{G16\_draw\_molecule} and restyle every part of it after the fact
+(title, axis labels, legend, atom spheres, bond lines, atom-label text),
+rather than only being able to set style options at call time.
+
+\begin{tbnote}
+\textbf{The key gotcha this example exists to document:} most of the
+graphics objects \code{G16\_draw\_molecule} creates (all bond lines, and
+every atom sphere after the first drawn for a given element) are created
+with \code{'HandleVisibility', 'off'}, so they do not clutter the
+legend or turn up in a plain \code{findobj} search. Reaching them
+requires \code{findall} instead of \code{findobj}. Title, axis labels,
+and the legend itself keep the default (\code{'on'}) visibility, so
+either function finds those. The script also re-enables the axes
+(\code{axis(ax, 'on')}) to reveal the X/Y/Z labels, which
+\code{G16\_draw\_molecule} always creates but hides by calling
+\code{axis(ax, 'off')} internally; and separates the atom-label text
+objects from the title/axis-label text objects (all four share
+\code{Type = 'text'}) with a \code{setdiff}.
+\end{tbnote}
+
+\begin{lstlisting}
+%% Example 4
+%% Recover graphics handles from G16_draw_molecule and restyle them
+mol = G16_structure('test_2.out');
+G16_draw_molecule(mol, 'Title', 'Violacein');
+
+ax  = gca;
+fig = gcf;
+
+%% 1) Title -- always visible (HandleVisibility default 'on')
+title(ax, 'Violacein (DFT-optimised)', 'FontSize', 13, ...
+      'FontWeight', 'bold', 'Interpreter', 'tex');
+
+%% 2) Axis labels -- G16_draw_molecule calls axis(ax,'off'), so labels
+%    exist but are not shown until the axis is switched back on
+axis(ax, 'on');
+xlabel(ax, 'X (\AA)', 'FontSize', 11, 'Interpreter', 'latex');
+ylabel(ax, 'Y (\AA)', 'FontSize', 11, 'Interpreter', 'latex');
+zlabel(ax, 'Z (\AA)', 'FontSize', 11, 'Interpreter', 'latex');
+
+%% 3) Legend -- created with default HandleVisibility, findobj works fine
+hleg = findobj(fig, 'Type', 'Legend');
+set(hleg, 'FontSize', 10, 'Location', 'northeast', 'Box', 'on');
+
+%% 4) Atom spheres (Surface objects) -- use findall: most have
+%    HandleVisibility 'off' (only the first atom per element is 'on')
+hatoms = findall(ax, 'Type', 'Surface');
+set(hatoms, 'FaceAlpha', 0.9, 'EdgeColor', 'none');
+
+%% 5) Bond lines -- all created with HandleVisibility 'off', findall required
+hbonds = findall(ax, 'Type', 'Line');
+set(hbonds, 'LineWidth', 2.5, 'Color', [0.35 0.35 0.35]);
+
+%% 6) Atom-label text objects only, excluding Title/XLabel/YLabel/ZLabel
+%    (these are also Type='text', so must be explicitly subtracted out)
+htitle_h = get(ax, 'Title');
+hxlab    = get(ax, 'XLabel');
+hylab    = get(ax, 'YLabel');
+hzlab    = get(ax, 'ZLabel');
+halltext = findall(ax, 'Type', 'Text');
+hatomlbl = setdiff(halltext, [htitle_h; hxlab; hylab; hzlab]);
+set(hatomlbl, 'FontSize', 8, 'FontWeight', 'bold');
+
+%% 7) Background / figure colour
+set(ax,  'Color', [1 1 1]);
+set(fig, 'Color', [1 1 1]);
+
+exportgraphics(fig, 'test_2_mol_restyled.pdf', 'ContentType', 'vector');
+\end{lstlisting}
+
+\newpage
+
+% =============================================================================
+\section{Publication and licensing}
+% =============================================================================
+\subsection{Declaration of Generative AI and AI-assisted technologies in the writing process}
+
+During the preparation of this work, the author(s) used Claude (Anthropic)
+to assist with code drafting, refactoring, and documentation of the
+G09/G16 toolbox and its associated user manual. After using this tool, the
+author(s) reviewed and edited the content as needed and take full
+responsibility for the content of the publication.
+
+\subsection{Note on the Use of AI-Assisted Development Tools}
+
+Portions of the codebase and documentation described in this manual ---
+including the \code{G09\_}/\code{G16\_} MATLAB function pairs, the
+\code{g16toolbox} Python package, the \code{G09\_modeViewer.m}/
+\code{G16\_modeViewer.m} interactive GUIs, and this reference manual ---
+were developed with the assistance of Claude (Anthropic), an AI-based
+coding tool, used interactively under the direct supervision of the
+author. All AI-generated code was tested against reference Gaussian
+09/16 output files and reviewed by the author prior to inclusion.
+Algorithm design, scientific validation, and correctness of results
+remain the sole responsibility of the author.
+
+\subsection{Scope and disclaimer}
+\label{sec:scope-disclaimer}
+
+This toolbox is provided as a research and productivity aid for parsing,
+analysing, and visualising Gaussian~09/16 output files --- it is not a
+validated or certified computational-chemistry package, and its numerical
+output has not been benchmarked beyond the specific test cases described
+in this manual and its companion \code{G\_Utility} manual (which carries
+its own, matching ``Scope and disclaimer'' note). A number of functions
+rely on geometric or heuristic approximations rather than a direct read
+of a corresponding Gaussian-computed quantity: for instance, bond order in
+\code{G09\_draw\_molecule}/\code{G16\_draw\_molecule}
+(\S\ref{sec:draw-molecule}) is estimated purely from bond length, not
+from an actual Gaussian Wiberg/NBO bond-order analysis, and C--N bonds
+are deliberately never classified as double even when geometrically
+short, since a single length threshold cannot separate an aromatic C--N
+from a genuine C=N. Every such approximation is documented, together
+with its known limitations, at the point in this manual (or the
+\code{G\_Utility} manual) where the relevant function is described.
+Users remain responsible for independently verifying any result before
+relying on it for a scientific conclusion or publication --- the same
+standard that would be applied to the output of any third-party analysis
+tool. This note is a scientific/methodological caveat and does not
+replace the legal warranty disclaimer already given in the
+\code{LICENSE} file distributed with the source code.
+
+\subsection{Licence}
+
+This software is released under the \textbf{BSD 3-Clause License}, an
+OSI-approved open source license accepted by SoftwareX. See the
+\code{LICENSE.txt} file distributed with the source code for the full
+licence text.
+
+\subsection{Citation}
+
+If this toolbox contributes to published research, please acknowledge it
+by citing the source repository:
+
+\begin{quote}
+S.~Trusso, \emph{G09/G16 Toolbox: MATLAB and Python libraries for parsing,
+analysing and visualising Gaussian~09/16 output files},
+\url{https://github.com/nello62/Gaussian09G16_output_Matlab_parser}
+(accessed \today).
+\end{quote}
+
+\end{document}
