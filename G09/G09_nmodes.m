@@ -19,6 +19,18 @@ function nm = G09_nmodes(filename, varargin)
 %       .Natoms     int
 %       .has_Raman  logical
 %       .filename   char
+%       .RamanFr        [Nmodes x K] per-incident-light-frequency Raman
+%                       activities (A^4/AMU), [] if the file has no
+%                       "RamAct Fr= N--" rows (i.e. no CPHF=RdFreq). Column
+%                       1 is always the static (0 cm-1) value -- numerically
+%                       identical to .Raman -- columns 2..K are the
+%                       dynamic/pre-resonance values, one per incident
+%                       wavelength actually requested, in the same order
+%                       as .IncidentLight.
+%       .IncidentLight  [1 x K]    incident light frequencies in cm-1, as
+%                       printed on the "Incident light (cm**-1): ..." line
+%                       ([] if absent). IncidentLight(1) is always 0.00.
+%       .has_RamanFr    logical    true if .RamanFr is non-empty
 %
 %   Optional parameters also include:
 %       'Lines'  - pre-read cell array of file lines (from G09_READ_LINES),
@@ -62,6 +74,8 @@ frcconst = [];
 symmetry = {};
 disp_all = [];
 Natoms_det = 0;
+RamanFrAccum  = {};   % RamanFrAccum{n} = accumulated column for incident freq index n
+IncidentLight = [];   % [1 x K] cm-1, parsed once from the section header
 
 end_pat = '^\s*(-{20,}|Thermochemistry|Zero-point|Normal termination|Leave Link)';
 k = sec_start + 1;
@@ -100,6 +114,24 @@ while k <= N
     end
     if ~isempty(regexp(ln, '^\s*Raman Activ\s*--', 'once'))
         Ramans = [Ramans; sscanf(parse_rhs(ln), '%f')]; %#ok<AGROW>
+        k = k+1; continue
+    end
+
+    % ---------- Incident light (cm**-1): ... (CPHF=RdFreq header) ----------
+    if isempty(IncidentLight) && ~isempty(regexp(ln, '^\s*Incident light\s*\(cm\*\*-1\):', 'once'))
+        IncidentLight = sscanf(parse_rhs_colon(ln), '%f')';
+        k = k+1; continue
+    end
+
+    % ---------- RamAct Fr= N-- (CPHF=RdFreq per-frequency Raman) ----------
+    tok = regexp(ln, '^\s*RamAct Fr=\s*(\d+)\s*--', 'tokens', 'once');
+    if ~isempty(tok)
+        fridx = str2double(tok{1});
+        vals  = sscanf(parse_rhs(ln), '%f');
+        if numel(RamanFrAccum) < fridx
+            RamanFrAccum{fridx} = []; %#ok<AGROW>
+        end
+        RamanFrAccum{fridx} = [RamanFrAccum{fridx}; vals]; %#ok<AGROW>
         k = k+1; continue
     end
 
@@ -147,6 +179,20 @@ frcconst = fix_vec(frcconst);
 has_Raman = numel(Ramans) == Nmodes;
 if ~has_Raman, Ramans = []; end
 
+% ---------- RamanFr: assemble the per-incident-frequency matrix ----------
+if isempty(RamanFrAccum)
+    RamanFr = [];
+else
+    K = numel(RamanFrAccum);
+    RamanFr = NaN(Nmodes, K);
+    for c = 1:K
+        if ~isempty(RamanFrAccum{c})
+            RamanFr(:, c) = fix_vec(RamanFrAccum{c});
+        end
+    end
+end
+has_RamanFr = ~isempty(RamanFr);
+
 while numel(symmetry) < Nmodes, symmetry{end+1} = '?'; end
 symmetry = symmetry(1:Nmodes);
 
@@ -156,6 +202,7 @@ if ~isempty(mode_sel)
     freqs    = freqs(idx);
     IRs      = IRs(idx);
     if has_Raman, Ramans = Ramans(idx); end
+    if has_RamanFr, RamanFr = RamanFr(idx, :); end
     redmass  = redmass(idx);
     frcconst = frcconst(idx);
     symmetry = symmetry(idx);
@@ -174,6 +221,9 @@ nm.Nmodes    = Nmodes;
 nm.Natoms    = Natoms_det;
 nm.has_Raman = has_Raman;
 nm.filename  = filename;
+nm.RamanFr       = RamanFr;
+nm.IncidentLight = IncidentLight;
+nm.has_RamanFr   = has_RamanFr;
 
 fprintf('G09_nmodes: %d modes, %d atoms — %s\n', Nmodes, Natoms_det, filename);
 
@@ -183,4 +233,16 @@ end  % G09_nmodes
 function s = parse_rhs(ln)
 idx = strfind(ln, '--');
 s   = ln(idx(1)+2 : end);
+end
+
+
+% Right-hand side after the FIRST ':' (for the "Incident light (cm**-1):
+% 0.00  12738.85" header line, whose numbers follow a colon, not a "--")
+function s = parse_rhs_colon(ln)
+idx = strfind(ln, ':');
+if isempty(idx)
+    s = ln;
+else
+    s = ln(idx(1)+1 : end);
+end
 end

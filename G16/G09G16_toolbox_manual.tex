@@ -522,7 +522,30 @@ preliminary and a final one) and defaults to the last.
 \code{.symmetry} & Symmetry labels \\
 \code{.disp} & $[N_\text{atoms}\times3\times N_\text{modes}]$ Cartesian displacement vectors \\
 \code{.Nmodes}, \code{.Natoms}, \code{.has\_Raman}, \code{.filename} & \\
+\code{.RamanFr} & $[N_\text{modes}\times K]$ per-incident-light-frequency Raman activities (\AA$^4$/AMU), \code{[]} if the file has no \code{CPHF=RdFreq} data. Column 1 is always the static (0~cm$^{-1}$) value --- numerically identical to \code{.Raman} --- columns 2..$K$ are the dynamic/pre-resonance values, one per incident wavelength actually requested \\
+\code{.IncidentLight} & $[1\times K]$ incident light frequencies in cm$^{-1}$, as printed on Gaussian's own \emph{``Incident light (cm**-1): ...''} line (\code{[]} if absent); \code{IncidentLight(1)} is always \code{0.00} \\
+\code{.has\_RamanFr} & Logical, true if \code{.RamanFr} is non-empty \\
 \end{argtabletwo}
+
+\begin{tbnote}
+\textbf{Static vs.\ dynamic (CPHF=RdFreq) Raman activities.} With
+\code{Freq=Raman} plus \code{CPHF=RdFreq} (e.g.\ a \code{"785 nm"} line in
+the input stream), Gaussian's own output prints, for every mode, both a
+generic \code{Raman Activ --} row (numerically the STATIC, 0~cm$^{-1}$
+value) and explicit \code{RamAct Fr=~1--}/\code{RamAct Fr=~2--} rows ---
+Fr=1 repeating the same static value, Fr=2 being the genuinely
+frequency-dependent one at the requested wavelength. Earlier versions of
+\code{G09\_nmodes}/\code{G16\_nmodes} read only the generic row (per their
+own inline comment, \emph{``RamAct Fr=... lines are skipped''}), so
+\code{.Raman} was always the static value even for a \code{CPHF=RdFreq}
+job, with the dynamic value silently unavailable. Verified directly on a
+785~nm job (\code{MPBA\_SH.out}): mode~1 has \code{.Raman} $=1.7384$
+(static) but \code{.RamanFr(1,2)} $=1.8922$ (785~nm, from the same file)
+--- a real, non-negligible difference. \code{.IR} has no such ambiguity:
+Gaussian prints only one \code{IR Inten --} row (IR intensity comes from
+the dipole derivative, not the frequency-dependent polarizability, so it
+is not itself computed at more than one incident frequency).
+\end{tbnote}
 
 % -----------------------------------------------------------------------------
 \subsection{G09\_spectra / G16\_spectra}
