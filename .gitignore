@@ -5,9 +5,18 @@
 !/G09/
 !/G16/
 !/G16parser/
+!/G_Utility/
 !/.github/
 !/.gitignore
 !/README.md
+
+# G_Utility/: only these three tools are part of the tracked toolbox;
+# everything else in G_Utility/ (ConvFile, JobCheck, ModeMatch, the
+# manual, scratch/test files) stays private/untracked.
+/G_Utility/*
+!/G_Utility/au2SI/
+!/G_Utility/MOSurface/
+!/G_Utility/RamanBrowser/
 
 # Python cache/build junk, even inside the tracked folder
 **/__pycache__/
@@ -17,6 +26,14 @@
 # Editor/OS junk, even inside the tracked folders
 **/.DS_Store
 **/*.asv
+**/~$*
+
+# Superseded by the merged section in G09G16_toolbox_manual.tex; not
+# tracked separately.
+/G_Utility/au2SI/AU_Toolbox_Manual.docx
+
+# Test/scratch data artifacts, not toolbox source.
+/G_Utility/MOSurface/CH3_spin.cube
 
 # Claude Code local tool settings (machine-specific, not project content)
 **/.claude/

@@ -9,6 +9,7 @@ matplotlib plots, and an interactive Tkinter vibrational-mode viewer.
 """
 
 from ._common import Struct
+from .au_convert import g16_au_convert, g16_au_table, g16_gaussian_field_convert
 from .gaussian_version import g16_gaussian_version
 from .charge_mult import g16_charge_mult
 from .route import g16_route
@@ -43,6 +44,7 @@ from .write_report import g16_write_report
 
 __all__ = [
     "Struct",
+    "g16_au_convert", "g16_au_table", "g16_gaussian_field_convert",
     "g16_gaussian_version", "g16_charge_mult", "g16_route", "g16_available_data",
     "g16_structure", "g16_read_input", "g16_energy", "g16_convergence", "g16_dipole_polar",
     "g16_charges", "g16_nmodes", "g16_spectra", "g16_spectra_nm", "g16_orbital_energies",

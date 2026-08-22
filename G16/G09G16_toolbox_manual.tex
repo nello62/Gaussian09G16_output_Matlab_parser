@@ -125,7 +125,15 @@ files (\code{.out}/\code{.log}) and formatted checkpoint files
   \item 3D molecular structure rendering (CPK ball-and-stick models) with
         atomic charge and dipole overlays;
   \item utility functions for bond-length tables, Gaussian version detection,
-        restart-file generation, and toolbox self-documentation.
+        restart-file generation, and toolbox self-documentation;
+  \item real-space molecular-orbital, electron-density, and electrostatic-
+        potential isosurfaces evaluated directly from \code{.fchk} basis-set
+        data (\code{MOSurface}, \S\ref{sec:gutil-mo-surface});
+  \item an interactive click-to-select Raman/IR stick-spectrum browser
+        (\code{RamanBrowser}, \S\ref{sec:gutil-raman-browser});
+  \item atomic-unit \(\leftrightarrow\) SI conversions for the physical
+        quantities computational chemistry results are commonly reported in
+        (\code{au2SI}, \S\ref{sec:gutil-au2si}).
   \end{itemize}
 
 Function names follow the \code{G09\_xxx}/\code{G16\_xxx} convention,
@@ -492,6 +500,7 @@ activities; for exact scaled values use \code{G16\_spectra} instead).
 
 % -----------------------------------------------------------------------------
 \subsection{G09\_nmodes / G16\_nmodes}
+\label{sec:nmodes-ref}
 
 \begin{lstlisting}
 nm = G09_nmodes(filename)
@@ -1178,6 +1187,1189 @@ See also \code{G09\_draw\_molecule}\slash\code{G16\_draw\_molecule},
 \newpage
 
 % =============================================================================
+\section{au2SI: atomic units \texorpdfstring{$\leftrightarrow$}{<->} SI conversions}
+\label{sec:gutil-au2si}
+% =============================================================================
+\code{AU\_convert}/\code{AU\_table} convert physical quantities between
+atomic units (au) and SI (or other common units used in computational
+chemistry); \code{G\_gaussian\_field\_convert} additionally converts
+Gaussian's own \code{Field=X+N} route-keyword integer to/from a physical
+field strength. All conversion factors are based on CODATA 2022 (NIST,
+November 2024 release). The toolbox covers 16 physical-quantity
+categories, all three functions are also ported to Python directly
+inside \code{G16parser} (\S\ref{sec:gutil-au2si-python}):
+
+\begin{argtabletwo}{Quantity}{au unit}{4.2cm}{X}
+Energy               & Hartree (\(E_h\)) \\
+Length               & Bohr (\(a_0\)) \\
+Dipole moment        & \(e\cdot a_0\) \\
+Polarisability \(\alpha\)        & \(e^2a_0^2/E_h\) \\
+1st hyperpolarisability \(\beta\)& \(e^3a_0^3/E_h^2\) \\
+2nd hyperpolarisability \(\gamma\)& \(e^4a_0^4/E_h^3\) \\
+Force                & \(E_h/a_0\) \\
+Force constant       & \(E_h/a_0^2\) \\
+Frequency            & \(E_h/\hbar\) \\
+Time                 & \(\hbar/E_h\) \\
+Pressure             & \(E_h/a_0^3\) \\
+Electric field       & \(E_h/(e\,a_0)\) \\
+Mass                 & \(m_e\) \\
+Charge               & \(e\) \\
+Magnetic moment      & \(\mu_B\) \\
+Temperature          & \(k_BT \leftrightarrow K\) \\
+\end{argtabletwo}
+
+\begin{tbnote}
+No additional toolboxes or external dependencies are required. Both
+functions use only MATLAB built-ins.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{AU\_convert}
+\label{sec:gutil-au-convert}
+
+\begin{lstlisting}
+result = AU_convert(value, quantity, direction)
+result = AU_convert(value, quantity, direction, 'target', unit)
+AU_convert([], 'help', '')               % print full reference table
+\end{lstlisting}
+
+\begin{argtabletwo}{Argument}{Description}{2.4cm}{X}
+\code{value}     & Scalar or array of values to convert (double). Arrays are converted element-wise. \\
+\code{quantity}  & Physical quantity string (case-insensitive) --- see the reference table below. \\
+\code{direction} & \code{'au2si'} --- from atomic units to SI (or target unit); \code{'si2au'} --- from SI (or target unit) to atomic units \\
+\code{'target'}  & Name-Value: target unit when multiple options exist for the SI side. Optional --- a default is used when omitted. \\
+\end{argtabletwo}
+
+\code{AU\_convert} returns a \code{double} array of the same shape as
+\code{value}. When \code{value} is a scalar, the conversion is also
+printed to the console.
+
+\begin{tbnote}
+\textbf{Quantity strings and available targets.} The table below lists
+every supported quantity string, the atomic unit on the left side, and
+the available target units on the SI side. The default target (used when
+\code{'target'} is omitted) is the first row of each quantity block.
+\end{tbnote}
+
+\begin{longtable}{@{}p{2.4cm}p{2.6cm}p{2.4cm}p{\dimexpr\textwidth-2.4cm-2.6cm-2.4cm-8\tabcolsep-2\arrayrulewidth\relax}@{}}
+\toprule
+\textbf{quantity string} & \textbf{au unit} & \textbf{'target'} & \textbf{SI/target unit (1 au =)} \\
+\midrule
+\endhead
+\code{'energy'}     & Hartree ($E_h$) & (default) & J \quad $4.3597447\times10^{-18}$ \\
+                     &                 & \code{'kJ/mol'}   & $2625.4996$ kJ/mol \\
+                     &                 & \code{'kcal/mol'} & $627.5095$ kcal/mol \\
+                     &                 & \code{'eV'}       & $27.211386$ eV \\
+                     &                 & \code{'cm-1'}     & $219474.631$ cm$^{-1}$ \\
+\code{'length'}     & Bohr ($a_0$)    & (default) & m \quad $5.2917721\times10^{-11}$ \\
+                     &                 & \code{'Angstrom'} & $0.5291772$ \AA \\
+                     &                 & \code{'pm'}       & $52.9177$ pm \\
+\code{'dipole'}     & $e\cdot a_0$    & (default) & C$\cdot$m \quad $8.4783536\times10^{-30}$ \\
+                     &                 & \code{'Debye'}    & $2.541747$ D \\
+\code{'polar'}      & $e^2a_0^2/E_h$  & (default) & C$^2\cdot$m$^2\cdot$J$^{-1}$ \quad $1.6487773\times10^{-41}$ \\
+                     &                 & \code{'Angstrom3'}& $0.148185$ \AA$^3$ (volume) \\
+                     &                 & \code{'esu'}      & $1.48185\times10^{-25}$ cm$^3$ (esu) \\
+\code{'beta'}       & $e^3a_0^3/E_h^2$& (default) & C$^3\cdot$m$^3\cdot$J$^{-2}$ \quad $3.2064\times10^{-53}$ \\
+                     &                 & \code{'esu'}      & $8.6392\times10^{-33}$ esu \\
+\code{'gamma'}      & $e^4a_0^4/E_h^3$& (default) & C$^4\cdot$m$^4\cdot$J$^{-3}$ \quad $6.2354\times10^{-65}$ \\
+\code{'force'}      & $E_h/a_0$       & (default) & N \quad $8.2387\times10^{-8}$ \\
+                     &                 & \code{'nN'}       & $82.387$ nN \\
+\code{'frcconst'}   & $E_h/a_0^2$     & (default) & N/m \quad $1556.893$ \\
+                     &                 & \code{'mDyne/A'}  & $15.5689$ mDyne/\AA \\
+\code{'frequency'}  & $E_h/\hbar$     & (default) & rad/s \quad $4.13414\times10^{16}$ \\
+                     &                 & \code{'Hz'}       & $6.57968\times10^{15}$ Hz \\
+                     &                 & \code{'THz'}      & $6579.684$ THz \\
+                     &                 & \code{'cm-1'}     & $219474.631$ cm$^{-1}$ \\
+\code{'time'}       & $\hbar/E_h$     & (default) & s \quad $2.41888\times10^{-17}$ \\
+                     &                 & \code{'fs'}       & $0.024189$ fs \\
+                     &                 & \code{'as'}       & $24.1888$ as \\
+\code{'pressure'}   & $E_h/a_0^3$     & (default) & Pa \quad $2.94210\times10^{13}$ \\
+                     &                 & \code{'GPa'}      & $29421.0$ GPa \\
+                     &                 & \code{'atm'}      & $2.90443\times10^{8}$ atm \\
+\code{'efield'}     & $E_h/(e\,a_0)$  & (default) & V/m \quad $5.14221\times10^{11}$ \\
+                     &                 & \code{'GV/m'}     & $514.221$ GV/m \\
+                     &                 & \code{'V/A'}      & $51.4221$ V/\AA \\
+\code{'mass'}       & $m_e$           & (default) & kg \quad $9.10938\times10^{-31}$ \\
+                     &                 & \code{'Da'}       & $5.48580\times10^{-4}$ Da (AMU) \\
+\code{'charge'}     & $e$             & (default) & C \quad $1.60218\times10^{-19}$ \\
+\code{'magmom'}     & $\mu_B$         & (default) & J/T \quad $9.27401\times10^{-24}$ \\
+\code{'temp'}       & $E_h \leftrightarrow$ K & (default) & K (via $k_BT$) \quad $315775.0$ \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{Examples}
+
+\begin{lstlisting}
+% SCF energy: au -> kJ/mol and eV
+AU_convert(-875.9322, 'energy', 'au2si', 'target', 'kJ/mol')
+AU_convert(-875.9322, 'energy', 'au2si', 'target', 'eV')
+
+% Relative Gibbs energy between two conformers
+dG_au = en2.G - en1.G;
+dG_kJ = AU_convert(dG_au, 'energy', 'au2si', 'target', 'kJ/mol');
+
+% Vibrational zero-point energy (freq in cm-1 -> Eh)
+zpe_au = AU_convert(1582.8/2, 'energy', 'si2au', 'target', 'cm-1');
+
+% Dipole moment: au -> Debye (G16_dipole_polar with 'units','au')
+dp   = G16_dipole_polar('V_E00t.out', 'units', 'au');
+mu_D = AU_convert(dp.mu_tot, 'dipole', 'au2si', 'target', 'Debye');
+
+% Polarisability tensor: au -> Angstrom^3 (volume polarisability)
+dp       = G09_dipole_polar('INDACO_E025_ppDP.LOG');
+alpha_A3 = AU_convert(dp.alpha_tensor, 'polar', 'au2si', 'target', 'Angstrom3');
+
+% Force constants: au -> mDyne/Angstrom
+nm       = G16_nmodes('V_E00t.out');
+fc_mdyne = AU_convert(nm.frcconst, 'frcconst', 'au2si', 'target', 'mDyne/A');
+
+% Geometry array: Angstrom -> Bohr
+mol      = G16_structure('V_E00t.out');
+xyz_bohr = AU_convert(mol.xyz, 'length', 'si2au', 'target', 'Angstrom');
+
+% Thermal energy kBT at room temperature
+kBT = AU_convert(298.15, 'temp', 'si2au');
+
+% Hyperpolarisability: au -> esu
+hp       = G16_hyperpolar('V_E00t.out');
+beta_esu = AU_convert(hp.beta0.beta_vec, 'beta', 'au2si', 'target', 'esu');
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{AU\_table}
+\label{sec:gutil-au-table}
+
+\begin{lstlisting}
+AU_table                  % print complete table
+AU_table('energy')        % print energy section only
+AU_table('constants')     % print fundamental constants section
+AU_table('polar')         % print polarisability section
+\end{lstlisting}
+
+Prints a formatted reference table of conversion factors and fundamental
+physical constants to the MATLAB console. The filter argument is
+case-insensitive and accepts the same quantity strings as
+\code{AU\_convert} (\code{energy}, \code{length}, \code{dipole},
+\code{polar}, \code{beta}, \code{gamma}, \code{force}, \code{frcconst},
+\code{frequency}, \code{time}, \code{pressure}, \code{efield},
+\code{mass}, \code{charge}, \code{magmom}, \code{temp}, plus
+\code{constants} for the fundamental-constants section).
+
+\begin{lstlisting}
+>> AU_table('energy')
+
+  -- ENERGY --
+  1 Hartree (Eh)              = 4.3597447222e-18 J
+                               = 2625.499639 kJ/mol
+                               = 627.509474 kcal/mol
+                               = 27.211386 eV
+                               = 219474.6314 cm-1
+                               = 27211.386 meV
+  1 eV                        = 1.6021766340e-19 J
+                               = 96.4853 kJ/mol
+                               = 8065.5439 cm-1
+  1 cm-1                      = 1.9864459e-23 J
+                               = 4.55634e-06 Hartree
+  1 kJ/mol                    = 3.80880e-04 Hartree
+  1 kcal/mol                  = 1.59360e-03 Hartree
+  1 kBT (298.15K)             = 9.44185e-04 Hartree  (= 2.4790 kJ/mol)
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G\_gaussian\_field\_convert}
+\label{sec:gutil-gaussian-field-convert}
+
+\begin{lstlisting}
+out = G_gaussian_field_convert(N, 'g2phys')
+out = G_gaussian_field_convert(N, 'g2phys', 'Unit', 'V/Ang')
+out = G_gaussian_field_convert(value, 'phys2g', 'Unit', 'au')
+\end{lstlisting}
+
+Converts between Gaussian's \code{Field=X+N} route-keyword integer and a
+physical electric-field strength. Gaussian's \code{Field} keyword (e.g.\
+\code{Field=X+10}, \code{Field=X-5}) specifies a static electric field
+whose magnitude, in atomic units, is the keyword's integer \(N\) times
+\(0.0001\) --- i.e.\ \(N \times 10^{-4}\) a.u.
+
+\begin{tbnote}
+\textbf{Verified against the source, not assumed.} This convention was
+confirmed directly from Gaussian's own keyword reference
+(\url{https://gaussian.com/field/}): \emph{"N*0.0001 specifies the
+magnitude of the field in atomic units"} (for the \(M{\pm}N\) format, the
+one a plain dipole field like \code{Field=X+10} uses) --- quoted from the
+source rather than assumed, since this exact convention is easy to get
+wrong (a field-magnitude keyword invites exactly this kind of silent
+off-by-a-power-of-ten mistake).
+\end{tbnote}
+
+\begin{argtabletwo}{Argument}{Description}{2.2cm}{X}
+\code{value}     & Gaussian keyword integer \(N\) (direction \code{'g2phys'}) or a physical field strength (direction \code{'phys2g'}); may be a numeric array (applied elementwise) \\
+\code{direction} & \code{'g2phys'} --- \(N \to\) physical field strength; \code{'phys2g'} --- physical field strength \(\to N\) \\
+\end{argtabletwo}
+
+\begin{argtable}{Option}{Default}{Description}{2.0cm}{2.0cm}{X}
+\code{'Unit'}  & \code{'au'}  & \code{'au'} \textbar\ \code{'V/m'} \textbar\ \code{'V/cm'} \textbar\ \code{'V/Ang'} --- the physical unit on the non-Gaussian side, for either direction \\
+\code{'Print'} & \code{true}  & Print a one-line summary \\
+\end{argtable}
+
+\begin{tbnote}
+\textbf{Rounding on \code{'phys2g'}.} Gaussian's keyword can only express
+multiples of \(0.0001\) a.u., so converting an arbitrary physical value
+back to \(N\) necessarily rounds to the nearest integer. A warning is
+printed whenever that rounding changes the value by more than 0.5\%, so a
+value that does not correspond to a "clean" \(N\) is never silently
+misrepresented.
+
+\textbf{Consistency with \code{AU\_convert}.} The atomic unit of electric
+field (\(E_h/(e\,a_0)\)) is computed from the same CODATA~2022 constants
+\code{AU\_convert} itself uses (Section~\ref{sec:gutil-au-convert}), not a
+separately rounded literal --- cross-checked to match
+\code{AU\_convert(\ldots, 'efield', \ldots, 'target', 'V/A')} exactly.
+\end{tbnote}
+
+\begin{lstlisting}
+G_gaussian_field_convert(10, 'g2phys')                    % N=10 -> 0.0010 au
+G_gaussian_field_convert(10, 'g2phys', 'Unit', 'V/Ang')   % N=10 -> 0.0514 V/Ang
+G_gaussian_field_convert(0.0025, 'phys2g', 'Unit', 'au')  % 0.0025 au -> N=25
+\end{lstlisting}
+
+See also \code{AU\_convert} (Section~\ref{sec:gutil-au-convert}).
+
+% -----------------------------------------------------------------------------
+\subsection{Integration with the G09/G16 Toolbox}
+
+\code{AU\_convert} operates on plain numeric arrays and is fully
+compatible with all structs returned by \code{G09\_*}/\code{G16\_*}
+functions. The table below lists the most common conversions needed
+after parsing a Gaussian output file.
+
+\begin{argtable}{Field}{Quantity / target}{Typical use}{2.6cm}{2.6cm}{X}
+\code{en.SCF} / \code{en.G} / \code{en.H} & \code{'energy'} $\to$ \code{'kJ/mol'} & Relative energies, reaction profiles \\
+\code{en.SCF}                             & \code{'energy'} $\to$ \code{'eV'}     & Band gaps, ionisation potentials \\
+\code{sp.freq}                            & already cm$^{-1}$                    & No conversion needed \\
+\code{nm.frcconst}                        & \code{'frcconst'} $\to$ \code{'mDyne/A'} & Comparison with experimental force constants \\
+\code{mol.xyz}                            & already \AA                          & Convert to Bohr (\code{'length'}, \code{si2au}) only for QM codes that need it \\
+\code{dp.mu\_tot}                         & \code{'dipole'} $\to$ \code{'Debye'} & Dipole magnitude (au by default) \\
+\code{dp.alpha\_tensor}                   & \code{'polar'} $\to$ \code{'Angstrom3'} & Volume polarisability for SERS/NLO analysis \\
+\code{hp.beta0.beta\_vec}                 & \code{'beta'} $\to$ \code{'esu'}     & Hyperpolarisability for NLO comparison \\
+$k_BT$ at $T$                             & \code{'temp'}, \code{si2au}           & Boltzmann weights in conformer analysis \\
+\code{en.S\_JmolK}                        & already J~mol$^{-1}$~K$^{-1}$        & No conversion needed \\
+\end{argtable}
+
+\begin{tbnote}
+Fields already returned in physical (non-au) units by G09/G16 Toolbox
+functions: \code{sp.freq} (cm$^{-1}$), \code{en.S\_JmolK}
+(J~mol$^{-1}$~K$^{-1}$), \code{en.ZPE\_kJ} (kJ/mol), \code{mol.xyz} (\AA),
+\code{sp.IR} (KM/Mole), \code{sp.Raman} (\AA$^4$/AMU). These do not
+require \code{AU\_convert}.
+\end{tbnote}
+
+\subsubsection*{Worked example: NLO property analysis}
+
+\begin{lstlisting}
+% Load properties from G16 output
+dp = G16_dipole_polar('V_E00t.out');
+hp = G16_hyperpolar('V_E00t.out');
+
+% Convert to common NLO units
+mu_D     = AU_convert(dp.mu_tot,         'dipole', 'au2si', 'target', 'Debye');
+alpha_A3 = AU_convert(dp.alpha_iso,      'polar',  'au2si', 'target', 'Angstrom3');
+beta_esu = AU_convert(hp.beta0.beta_vec, 'beta',   'au2si', 'target', 'esu');
+
+fprintf('mu      = %.4f D\n',   mu_D)
+fprintf('alpha   = %.3f A^3\n', alpha_A3)
+fprintf('|beta|  = %.3e esu\n', beta_esu)
+\end{lstlisting}
+
+\subsubsection*{Worked example: Boltzmann-weighted conformer ensemble}
+
+\begin{lstlisting}
+T   = 298.15;                            % K
+kBT = AU_convert(T, 'temp', 'si2au');    % Eh
+
+files = {'conf1.out', 'conf2.out', 'conf3.out'};
+G = zeros(1, numel(files));
+for i = 1:numel(files)
+    en   = G16_energy(files{i});
+    G(i) = en.G;
+end
+dG    = G - min(G);                      % relative Gibbs energy (Eh)
+w     = exp(-dG / kBT);                  % Boltzmann weights
+w     = w / sum(w);                      % normalised
+dG_kJ = AU_convert(dG, 'energy', 'au2si', 'target', 'kJ/mol');
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{CODATA 2022 fundamental constants}
+
+All conversion factors in \code{AU\_convert}/\code{AU\_table} are derived
+from the CODATA 2022 values below. Values marked \emph{(exact)} are fixed
+by definition in the 2019 SI redefinition.
+
+\begin{argtable}{Constant}{Symbol}{Value}{3.2cm}{1.6cm}{X}
+Bohr radius              & $a_0$    & $5.29177210544\times10^{-11}$ m \\
+Hartree energy           & $E_h$    & $4.3597447222060\times10^{-18}$ J \\
+Electron mass            & $m_e$    & $9.1093837139\times10^{-31}$ kg \\
+Proton mass              & $m_p$    & $1.67262192595\times10^{-27}$ kg \\
+Elementary charge        & $e$      & $1.602176634\times10^{-19}$ C (exact) \\
+Planck constant          & $h$      & $6.62607015\times10^{-34}$ J$\cdot$s (exact) \\
+Reduced Planck constant  & $\hbar$  & $1.054571817\times10^{-34}$ J$\cdot$s (exact) \\
+Speed of light           & $c$      & $299\,792\,458$ m/s (exact) \\
+Boltzmann constant       & $k_B$    & $1.380649\times10^{-23}$ J/K (exact) \\
+Avogadro constant        & $N_A$    & $6.02214076\times10^{23}$ mol$^{-1}$ (exact) \\
+Vacuum permittivity      & $\varepsilon_0$ & $8.8541878188\times10^{-12}$ F/m \\
+Bohr magneton            & $\mu_B$  & $9.2740100657\times10^{-24}$ J/T \\
+Nuclear magneton         & $\mu_N$  & $5.0507837393\times10^{-27}$ J/T \\
+\end{argtable}
+
+\begin{tbnote}
+Source: NIST CODATA 2022, \url{https://physics.nist.gov/cuu/Constants/}
+(published November 2024). The four exact constants ($e$, $h$, $k_B$,
+$N_A$) have been fixed since the 2019 SI redefinition.
+\end{tbnote}
+
+
+% -----------------------------------------------------------------------------
+\subsection{Python port (\code{g16\_au\_convert} / \code{g16\_au\_table} / \code{g16\_gaussian\_field\_convert})}
+\label{sec:gutil-au2si-python}
+
+Unlike \code{MOSurface}/\code{RamanBrowser} (\S\ref{sec:gutil-mo-surface-python},
+\S\ref{sec:gutil-raman-browser-python}), au2SI's Python port is folded
+directly into the \code{G16parser} package itself, not kept as a
+separate companion: it has no dependency of its own beyond plain
+\code{numpy}, and is exactly the kind of general, version-agnostic
+utility (like \code{g16\_read\_input}) that belongs in the core Python
+package rather than alongside it.
+
+\begin{lstlisting}
+import G16parser as g16
+
+g16.g16_au_convert(-875.932, 'energy', 'au2si', target='kJ/mol')
+g16.g16_au_convert(6.3347, 'dipole', 'si2au', target='Debye')
+g16.g16_au_table('energy')
+g16.g16_gaussian_field_convert(10, 'g2phys', unit='V/Ang')
+\end{lstlisting}
+
+\begin{argtabletwo}{Function}{Signature}{3.0cm}{X}
+\code{g16\_au\_convert}  & \code{g16\_au\_convert(value, quantity, direction, target='', verbose=None)} -- same quantity strings as \code{AU\_convert} (\S\ref{sec:gutil-au-convert}); \code{quantity='help'} prints the reference table and returns \code{None} \\
+\code{g16\_au\_table}    & \code{g16\_au\_table(section='')} -- same section filter as \code{AU\_table} (\S\ref{sec:gutil-au-table}), plus \code{'constants'} \\
+\code{g16\_gaussian\_field\_convert} & \code{g16\_gaussian\_field\_convert(value, direction, unit='au', verbose=True)} \\
+\end{argtabletwo}
+
+\begin{tbnote}
+\textbf{Validation.} Cross-checked directly against the MATLAB
+original, not just internally self-consistent: 12 quantity/target
+combinations spanning every category (energy, length, dipole, polar,
+beta, force, efield, temp, mass, pressure, frequency) agree with
+\code{AU\_convert.m} to $\sim$1e-13--1e-14 relative difference (limited
+by \code{\%.12e} text-transfer precision, not a real discrepancy); both
+\code{G\_gaussian\_field\_convert.m} directions (\code{g2phys}/
+\code{phys2g}) match exactly. A 23-case \code{pytest} regression suite
+(\code{tests/test\_au\_convert.py}) covers every function, including
+array input, the \code{'help'} mode, error paths, and the
+rounding-warning path on \code{g16\_gaussian\_field\_convert}.
+\end{tbnote}
+
+\newpage
+
+\section{MOSurface: real-space orbital, density, and ESP isosurfaces}
+\label{sec:gutil-mo-surface}
+% =============================================================================
+\code{MOSurface/} provides four GaussView-equivalent real-space
+renderers, all built directly from the raw \code{.fchk} basis-set data
+(or, for the fourth, directly from a saved \code{.cube} file) with no
+toolbox or third-party dependency beyond MATLAB's own built-in
+\code{isosurface}/\code{isonormals}/\code{patch}/\code{contourf}:
+\code{G\_draw\_mo\_surface} (\S\ref{sec:gutil-mo-surface-fn}, a chosen
+molecular orbital's $\pm$isosurface or 2D nodal map, GaussView's
+``Molecular Orbitals''), \code{G\_draw\_density\_surface}
+(\S\ref{sec:gutil-density-surface}, the total electron density, a
+density \emph{difference} between two calculations, or the \emph{spin}
+density of an unrestricted calculation, GaussView's ``Total
+Density''/``Spin Density''), \code{G\_draw\_esp\_surface}
+(\S\ref{sec:gutil-esp-surface}, the electrostatic potential mapped onto
+the density envelope, GaussView's ``ESP mapped on electron density''),
+and \code{G\_draw\_cube\_surface} (\S\ref{sec:gutil-cube-surface}, which
+re-renders an isosurface straight from an already-saved \code{.cube}
+file -- no \code{.fchk}, no basis-set re-evaluation). The first three
+can each export the underlying volumetric grid to a Gaussian-format
+\code{.cube} file via \code{'SaveCube'} (see each subsection);
+\code{G\_draw\_cube\_surface} is the load-and-replot companion that
+reads one back (or a real \code{cubegen}/GaussView-generated \code{.cube}
+just as well). Every other \code{MOSurface/} file (\code{g\_}-prefixed,
+lowercase) is an internal helper, never called directly by the user ---
+only the four \code{G\_}-prefixed functions above are the public API. A
+Python port of all four, \code{MOSurface/python/}, also exists (see
+\S\ref{sec:gutil-mo-surface-python}).
+
+% -----------------------------------------------------------------------------
+\subsection{G\_draw\_mo\_surface}
+\label{sec:gutil-mo-surface-fn}
+
+\begin{lstlisting}
+h = G_draw_mo_surface(data, mo_index)
+h = G_draw_mo_surface(data, mo_index, 'Name', Value, ...)
+\end{lstlisting}
+
+\code{data} is the full struct returned by \code{G09\_fchk\_read}/
+\code{G16\_fchk\_read} (must contain \code{.filename}, \code{.mol},
+\code{.Nbasis}, \code{.alpha\_MO\_coeff}, \code{.xyz\_bohr}).
+\code{mo\_index} selects which orbital to render: either a positive
+integer (1-based column of
+\code{reshape(data.alpha\_MO\_coeff, data.Nbasis, data.Nbasis)}), or the
+string \code{'HOMO'}, \code{'LUMO'}, \code{'HOMO-n'}, \code{'LUMO+n'}
+(resolved against \code{data.HOMO\_idx}).
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Mode'}         & \code{'surface'}           & \code{'surface'}: 3D $\pm$isosurface (below). \code{'contour'}: a 2D filled-contour amplitude map on a single plane, with the nodal line drawn explicitly -- see \S\ref{sec:gutil-mo-surface-contour} \\
+\code{'Plane'}        & \code{'auto'}              & (\code{'contour'} only) \code{'auto'}: best-fit plane through all atoms (PCA). \code{'xy'}/\code{'xz'}/\code{'yz'}: a coordinate plane through the centroid \\
+\code{'PlaneOffset'}  & \code{0} \AA               & (\code{'contour'} only) shifts the evaluation plane along its own normal -- see \S\ref{sec:gutil-mo-surface-contour} \\
+\code{'IsoValue'}     & \code{0.02}                & (\code{'surface'} only) Wavefunction-amplitude isosurface level (a.u.), GaussView's own default. Both $+$IsoValue and $-$IsoValue lobes are drawn. \\
+\code{'GridSpacing'}  & \code{0.15} Bohr           & Real-space grid spacing \\
+\code{'Padding'}      & \code{4.0} Bohr            & Grid/plane padding around the molecule's bounding box; auto-expanded if needed in \code{'surface'} mode (see below) \\
+\code{'SaveCube'}     & \code{''} (off)            & (\code{'surface'} only) filename; if given, writes the signed MO-amplitude grid already computed for the isosurface (no extra evaluation) to a Gaussian-format MO \code{.cube} file (negative atom count plus the orbital-index line, matching real \code{cubegen} MO cubes) \\
+\code{'PosColor'}     & blue                       & Positive-amplitude colour \\
+\code{'NegColor'}     & red                        & Negative-amplitude colour \\
+\code{'FaceAlpha'}    & \code{0.55}                & (\code{'surface'} only) Lobe transparency; used as-is with \code{'SurfaceStyle','transparent'} (the default), overridden to \code{1.0} with \code{'solid'} unless given explicitly (which always wins), unused with \code{'grid'} \\
+\code{'SurfaceStyle'} & \code{'transparent'}       & (\code{'surface'} only) \code{'solid'} \textbar\ \code{'transparent'} \textbar\ \code{'grid'} -- as in GaussView. \code{'grid'} draws the isosurface as a wireframe (mesh edges only, no face fill) coloured by \code{PosColor}/\code{NegColor} instead of a filled patch. Neither this function nor \code{G\_draw\_density\_surface} decimates the \code{'surface'} mesh, so a fine \code{'GridSpacing'} can give a very dense wireframe -- coarsen it for a readable grid render \\
+\code{'ShowMolecule'} & \code{true}                & \code{'surface'}: overlay the CPK model via whichever of \code{G09\_draw\_molecule}/\code{G16\_draw\_molecule} is on the path. \code{'contour'}: overlay a lightweight 2D atom/bond sketch instead \\
+\code{'ShowLabels'}   & \code{false}               & (\code{'surface'} only) Atom labels, forwarded to the molecule drawer; always shown in \code{'contour'} mode \\
+\code{'Ax'}           & \code{[]} (new figure)     & Existing axes handle \\
+\code{'Verbose'}      & \code{true}                & Print grid size and timing \\
+\end{argtable}
+
+Returns a struct \code{h}. In \code{'surface'} mode: \code{h.pos}/\code{h.neg},
+the positive/negative lobe \code{patch} handles (\code{[]} if that lobe was
+not found at \code{IsoValue}). In \code{'contour'} mode: \code{h.contour}
+(filled-contour handle) and \code{h.zero} (nodal-line handle, \code{[]} if
+the amplitude never changes sign on the plane).
+
+\subsubsection*{The physics}
+
+Each contracted Gaussian-type basis function is evaluated directly on the
+grid from its primitives,
+\[
+N(\alpha,l,m,n) = \left(\frac{2\alpha}{\pi}\right)^{3/4}
+\sqrt{\frac{(4\alpha)^{\,l+m+n}}{(2l-1)!!\,(2m-1)!!\,(2n-1)!!}},
+\]
+the standard Cartesian Gaussian-type-orbital (GTO) normalization
+constant~[\ref{ref:Boys1950}]. \textbf{Pure D/F/G shells} are built from the
+individually-normalized Cartesian components combined into real solid
+harmonics using the polynomial coefficients of
+Ribaldone \& Desmarais~[\ref{ref:Ribaldone2024}] (a modern, explicit
+re-derivation of the classic Schlegel \& Frisch
+transformation~[\ref{ref:SchlegelFrisch1995}]); the overall normalization of
+each pure component is \emph{computed at runtime}, not hard-coded, from
+the exact combinatorial self-overlap of same-centre Cartesian Gaussians
+--- deliberately avoiding hand-derived constants for the higher (F, G)
+shells, after an arithmetic slip was caught while hand-checking the
+simpler D case during development. \textbf{Cartesian D/F/G} shells use
+the corresponding per-component normalization ratio, computed the same
+way. \textbf{Shell-component ordering} (including the native Gaussian
+\code{.fchk} reversal for Cartesian shells with $L\!\geq\!4$) follows the
+convention documented by the IOData project's Gaussian \code{.fchk}
+reader~[\ref{ref:IOData}]. All of this is summed directly into a single
+\code{[Ngrid x 1]} accumulator, shell by shell, never forming the full
+\code{[Ngrid x Nbasis]} basis matrix, so memory stays bounded regardless
+of basis-set size.
+
+\begin{tbnote}
+\textbf{Supported shells: S, P, SP, D, F, G (pure or Cartesian).} A basis
+set containing H (or higher) shells raises a clear, immediate error
+rather than silently omitting or mis-rendering those basis functions ---
+there is no partial/best-effort rendering mode. F/G support was validated
+on a real Au-containing basis set (pure F and pure G functions on the Au
+atom): every molecular orbital with significant weight on those shells
+gave a self-normalization integral $\int|\psi|^2\,dV$ of 0.998--1.000.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Deep-core and some high-virtual orbitals can show grid
+artifacts.} A uniform rectangular grid under-resolves very tight
+(high-exponent) primitives: for such orbitals, the self-normalization
+integral can be non-monotonic and fail to converge cleanly even as
+\code{'GridSpacing'} is refined (root cause: a narrow, sharply-peaked
+Gaussian is intrinsically hard for naive Riemann-sum quadrature to
+capture, not a bug in the evaluator). Verified on real data: 10 of 12
+ordinary valence/frontier orbitals sampled across a full basis set gave
+0.993--1.000; the deepest core orbital and the highest virtual (both
+dominated by very tight primitives) did not converge under grid
+refinement. This does not affect the chemically relevant use case of
+rendering valence/frontier (HOMO/LUMO-region) orbitals.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Automatic padding.} Some orbitals (typically diffuse high
+virtuals) extend well beyond the default 4~Bohr padding and would
+otherwise be visibly clipped --- a flat-cut isosurface face at the edge
+of the plotted box. After each isosurface extraction, the vertices are
+checked against the grid boundary; if any lie within 1.5 grid cells of
+it, \code{'Padding'} is multiplied by 1.6 and the whole
+grid/evaluation/extraction is redone, up to 3 times (subject to the same
+30-million-point grid-size cap that also applies to a manually-set
+\code{'Padding'}). If an explicit \code{'Padding'} was given, this
+auto-expansion is skipped and a warning recommends increasing it instead.
+\end{tbnote}
+
+\begin{lstlisting}
+data = G16_fchk_read('4-NTP.fchk');
+G_draw_mo_surface(data, 'HOMO');
+G_draw_mo_surface(data, 'LUMO+1', 'IsoValue', 0.03, 'GridSpacing', 0.12);
+G_draw_mo_surface(data, 'HOMO', 'SaveCube', 'homo.cube');   % also export
+G_draw_mo_surface(data, 'HOMO', 'SurfaceStyle', 'grid', 'GridSpacing', 0.3);
+\end{lstlisting}
+
+\subsubsection*{'Mode','contour': 2D nodal maps}
+\label{sec:gutil-mo-surface-contour}
+
+Instead of a 3D isosurface, \code{'Mode','contour'} evaluates the MO on a
+single 2D plane and renders a filled amplitude map (diverging colour
+scale built from \code{'NegColor'}/\code{'PosColor'}, pinned to white at
+zero regardless of the actual data range) with the nodal
+(zero-amplitude) line drawn explicitly in black, plus a lightweight 2D
+atom/bond sketch for reference. It is much cheaper than a 3D grid, and
+often clearer for reading off the nodal pattern of a planar/near-planar
+$\pi$ system than a 3D isosurface viewed from an angle -- compare the
+worked example below with the equivalent \code{'Mode','surface'} render
+of the same orbital.
+
+\begin{tbnote}
+\textbf{A $\pi$-symmetry orbital is exactly zero on its own molecular
+plane.} By symmetry, a $\pi$ MO's amplitude is antisymmetric about the
+plane it is built perpendicular to, so \code{'Plane','auto'} (the
+best-fit plane through the atoms) together with the default
+\code{'PlaneOffset',0} shows essentially nothing for a typical aromatic
+HOMO/LUMO (verified: max amplitude $\sim 10^{-9}$--$10^{-29}$~a.u., pure
+numerical noise, on two different real aromatic test molecules). This is
+a property of the orbital, not a bug. \code{'PlaneOffset'} shifts the
+evaluation plane along its own normal by the given number of \AA{}
+(typically 0.5--1.0 for a $\pi$ system), probing a plane parallel to the
+molecular plane where the $\pi$ density actually peaks; the atom sketch
+is always drawn at the true, unshifted positions, for reference. A
+warning is printed whenever the resulting amplitude is essentially zero
+everywhere, naming this as the likely cause.
+\end{tbnote}
+
+\begin{lstlisting}
+% A HOMO with pi character: offset=0 shows (near) nothing by symmetry
+G_draw_mo_surface(data, 'HOMO', 'Mode', 'contour');
+
+% The pi density itself, 0.7 Angstrom above the ring
+G_draw_mo_surface(data, 'HOMO', 'Mode', 'contour', 'PlaneOffset', 0.7);
+\end{lstlisting}
+
+See also \code{G09\_fchk\_read}\slash\code{G16\_fchk\_read},
+\code{G09\_draw\_molecule}\slash\code{G16\_draw\_molecule} (main toolbox
+manual).
+
+% -----------------------------------------------------------------------------
+\subsection{G\_draw\_density\_surface}
+\label{sec:gutil-density-surface}
+
+\begin{lstlisting}
+h = G_draw_density_surface(data)
+h = G_draw_density_surface(data, 'Name', Value, ...)
+h = G_draw_density_surface(data, 'CompareTo', data2, ...)
+h = G_draw_density_surface(data, 'SpinDensity', true, ...)
+\end{lstlisting}
+
+Renders the total electron density, or (given a second structure via
+\code{'CompareTo'}) a density \emph{difference} map, or (for an
+unrestricted calculation, via \code{'SpinDensity'}) the \emph{spin}
+density $\rho_\alpha-\rho_\beta$ -- the G\_Utility equivalent of
+GaussView's ``Total Density''/``Spin Density'' surface types. It shares
+its real-space evaluation engine with \code{G\_draw\_mo\_surface}
+(\S\ref{sec:gutil-mo-surface-fn}): the density is electron-count-exact,
+not a heuristic, built from
+\[
+\rho(\mathbf r) = \sum_i n_i\,|\psi_i(\mathbf r)|^2
+\]
+summed over all \emph{occupied} orbitals of the relevant spin channel
+($n_i=2$ per orbital for the total/difference density, closed shell;
+$n_i=1$ per orbital, alpha and beta separately, for
+\code{'SpinDensity'}), evaluated in a \emph{single} pass through the
+basis shells for every occupied orbital at once
+(\code{g\_eval\_mo\_on\_grid} accepts an \code{[Nbasis x K]} coefficient
+matrix, not just a single column, and returns an \code{[Ngrid x K]}
+result) rather than looping the whole per-shell evaluation once per
+orbital.
+
+Most options (\code{'Mode'}, \code{'Plane'}, \code{'PlaneOffset'},
+\code{'GridSpacing'}, \code{'Padding'} with the same auto-expansion,
+\code{'FaceAlpha'}, \code{'SurfaceStyle'}, \code{'ShowMolecule'},
+\code{'ShowLabels'}, \code{'AtomScale'}, \code{'Ax'}, \code{'Verbose'})
+are identical to \code{G\_draw\_mo\_surface}. The differences:
+
+\begin{argtabletwo}{Option}{Description}{2.4cm}{X}
+\code{'CompareTo'} & A second data struct (same requirements as \code{data}). If given, renders $\rho(\text{CompareTo}) - \rho(\text{data})$ instead of the total density of \code{data} alone -- e.g. field-on minus field-off, to see where charge density increases/decreases. Both densities are evaluated on the same grid/plane, built from \code{data}'s geometry. Mutually exclusive with \code{'SpinDensity'} (default: \code{[]}, total density only) \\
+\code{'SpinDensity'} & Logical; if \code{true}, renders $\rho_\alpha(\mathbf r)-\rho_\beta(\mathbf r)$ of \code{data} alone -- see the tbnote below for the open-shell requirement. Mutually exclusive with \code{'CompareTo'} (default: \code{false}) \\
+\code{'IsoValue'} & Default \code{0.001} e/Bohr$^3$ -- the classic isodensity value conventionally used to define a molecule's outer envelope/``size'', appropriate for the \emph{total} density. A difference or spin density is usually one or more orders of magnitude smaller; if no isosurface is found, a warning suggests reducing \code{'IsoValue'} \\
+\code{'SaveCube'} & (\code{'surface'} only) filename; if given, writes the density (total, \emph{difference} with \code{'CompareTo'}, or \emph{spin} with \code{'SpinDensity'}) grid already computed for the isosurface to a Gaussian-format \code{.cube} file, at no extra evaluation cost (default: \code{''}, off) \\
+\code{'PosColor'} & The (only) density lobe colour without \code{'CompareTo'}/\code{'SpinDensity'}; the positive-difference or alpha-excess lobe colour with either \\
+\code{'NegColor'} & Only used with \code{'CompareTo'} (negative-difference lobe) or \code{'SpinDensity'} (beta-excess lobe) \\
+\end{argtabletwo}
+
+Returns \code{h.pos}/\code{h.neg}/\code{h.contour}/\code{h.zero}, with
+the same meaning as \code{G\_draw\_mo\_surface}; without
+\code{'CompareTo'}/\code{'SpinDensity'}, \code{h.neg} and \code{h.zero}
+are always \code{[]} (a total density is single-signed, so there is no
+negative lobe and no zero/nodal line to trace).
+
+\begin{tbnote}
+\textbf{Closed-shell only for the total density/\code{'CompareTo'}; a
+dedicated open-shell path for \code{'SpinDensity'}.} The total-density
+and \code{'CompareTo'} paths require \code{data.Nalpha == data.Nbeta}
+(and the same for \code{'CompareTo'}, if given) and raise a clear error
+otherwise, rather than silently building a wrong electron count for an
+open-shell (UHF/UKS) calculation. \code{'SpinDensity'} is the dedicated
+open-shell path instead: it does \emph{not} gate on
+\code{Nalpha==Nbeta} (not itself a restricted/unrestricted signal -- a
+broken-symmetry biradical singlet, for instance, can have
+\code{Nalpha==Nbeta} with genuinely different alpha/beta orbitals), but
+instead re-reads the raw \code{"Beta MO coefficients"} \code{.fchk}
+section directly (in the same self-contained spirit as
+\code{g\_read\_aobasis\_from\_fchk}, no core-toolbox change), which
+Gaussian only ever writes for a genuinely unrestricted calculation -- a
+restricted (RHF/RKS) \code{.fchk} has identical alpha/beta orbitals by
+construction (zero spin density everywhere) and this section is simply
+absent, raising a clear error rather than a confusing empty or all-zero
+plot. Each spin channel then uses occupation~1 per orbital (not~2), via
+\code{g\_eval\_density\_on\_grid}'s optional \code{occ\_factor}
+argument.
+
+Validated first on synthetic test cases (no genuine UHF/UKS
+\code{.fchk} was available in this repository at initial development
+time): a beta channel copied byte-for-byte from the alpha channel gives
+\emph{exactly} zero spin density at every sampled point (both a direct
+pointwise check and the expected ``no isosurface found'' warning); a
+beta channel using a shifted occupied window (still \code{Nbeta}
+orthonormal columns of the same AO basis, but a genuinely different
+occupied subspace) gives a clearly nonzero, spatially-varying spin
+density at 78\% of sampled points.
+
+Subsequently validated end-to-end against a real Gaussian UKS
+calculation: the methyl radical (CH$_3^{\bullet}$, UB3LYP/6-31G(d), doublet,
+$N_\alpha=5$, $N_\beta=4$). Integrating the rendered spin density over
+the same real-space grid gives $\int(\rho_\alpha-\rho_\beta)\,dV =
+1.0000$, matching $N_\alpha-N_\beta=1$ (the one unpaired electron)
+essentially exactly -- a quantitative check, not just a qualitative
+one. The isosurface shape matches the textbook picture for this
+system's SOMO (a carbon $p_z$ orbital, perpendicular to the molecular
+plane): the positive (alpha-excess) lobe spans $z\in[-1.14,+1.19]$~\AA{}
+-- i.e.\ two separate lobes straddling the (planar) molecule, not a
+single blob centred on it -- while a smaller negative (beta-excess)
+lobe sits close to the C-H bonding region ($xy$-radius from the carbon
+up to 1.44~\AA{}), consistent with the well-known spin polarization at
+the hydrogens of CH$_3^{\bullet}$ (the same effect responsible for their
+negative $^1$H hyperfine coupling constant in EPR).
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{A raw density plot on a plane through the nuclei is dominated by
+sharp nuclear cusps.} The electron density peaks very sharply at each
+nucleus -- one to several orders of magnitude larger than the
+chemically-interesting bonding/valence-region values -- so a
+\code{'Mode','contour'} colour scale naively set to the data's true
+maximum saturates the whole map to near-white except at a few nuclear
+pinpoints, hiding the region of actual interest. \code{'Mode','contour'}
+therefore caps the colour scale at the 98th percentile of the plotted
+values instead (values above the cap simply saturate to the
+top-of-scale colour); \code{'Mode','surface'} is unaffected, since an
+isosurface at a single, comparatively low \code{'IsoValue'} (e.g. the
+default 0.001) sits well outside the nuclear cusp region already.
+\end{tbnote}
+
+\begin{lstlisting}
+data = G16_fchk_read('4-NTP.fchk');
+G_draw_density_surface(data);                    % total density, 0.001 envelope
+G_draw_density_surface(data, 'Mode', 'contour');  % 2D map, capped colour scale
+
+data1 = G16_fchk_read('nofield.fchk');
+data2 = G16_fchk_read('field_x025.fchk');
+G_draw_density_surface(data1, 'CompareTo', data2, 'IsoValue', 0.0005);
+G_draw_density_surface(data, 'SaveCube', 'density.cube');   % also export
+G_draw_density_surface(data, 'SurfaceStyle', 'grid', 'GridSpacing', 0.3);
+
+radical = G16_fchk_read('radical_uks.fchk');   % unrestricted (UHF/UKS)
+G_draw_density_surface(radical, 'SpinDensity', true, 'IsoValue', 0.002);
+\end{lstlisting}
+
+See also \code{G\_draw\_mo\_surface} (\S\ref{sec:gutil-mo-surface-fn}),
+\code{G09\_fchk\_read}\slash\code{G16\_fchk\_read}.
+
+% -----------------------------------------------------------------------------
+\subsection{G\_draw\_esp\_surface}
+\label{sec:gutil-esp-surface}
+
+\begin{lstlisting}
+h = G_draw_esp_surface(data)
+h = G_draw_esp_surface(data, 'Name', Value, ...)
+h = G_draw_esp_surface(data, 'CompareTo', data2, ...)
+\end{lstlisting}
+
+Renders the molecular electrostatic potential (ESP) mapped onto the
+total-density isosurface (built via \code{G\_draw\_density\_surface}'s
+machinery) -- the G\_Utility equivalent of GaussView's classic ``ESP
+mapped on electron density'' surface, showing electrophilic
+(\code{PosColor}, blue, $V>0$) vs.\ nucleophilic (\code{NegColor}, red,
+$V<0$) character:
+\[
+V(\mathbf r) = \sum_A \frac{Z_A}{|\mathbf r-\mathbf R_A|}
+- \int \frac{\rho(\mathbf r')}{|\mathbf r-\mathbf r'|}\,d\mathbf r'
+\]
+$Z_A$ is read from the \code{.fchk} \texttt{"Nuclear charges"} section,
+\emph{not} the atomic number: for an ECP (effective core potential) atom
+this is the reduced effective charge seen by the explicit electrons --
+verified on a real Au-ECP test file, \texttt{"Nuclear charges"} $=19$ for
+Au vs.\ atomic number 79 (a 60-electron core ECP); using the atomic
+number would silently give a badly wrong nuclear term for any such atom.
+
+Unlike \code{G\_draw\_mo\_surface}/\code{G\_draw\_density\_surface}, the
+electronic term is a genuine Coulomb integral, not a simple point
+evaluation. By default it is evaluated \emph{exactly} (up to
+double-precision/basis-set truncation), via the analytic
+McMurchie-Davidson Hermite-Gaussian recursion~[\ref{ref:McMurchieDavidson1978},
+\ref{ref:Helgaker2000}] -- treating each surface vertex as an arbitrary
+field point in the same integral family as the nuclear-attraction term,
+built from Hermite expansion coefficients $E_t^{ij}$, Hermite Coulomb
+integrals $R_{tuv}$, and the Boys function $F_n(x)$ (evaluated in closed
+form via the regularized incomplete gamma function). This only supports
+S, P, SP, and pure D shells; for a basis with Cartesian D or F/G shells
+(or if \code{'ESPMethod'} is explicitly \code{'numeric'}), it falls back
+to the older \emph{numerical} Coulomb-grid-sum method (see the tbnote
+below), with a printed notice if \code{'Verbose'}. The full derivation,
+and the validation methodology and results summarized below, are in
+\code{Theory\_Vibrations\_Polarizability.tex}, Part~III.
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.4cm}{X}
+\code{'IsoValue'}       & \code{0.001}        & Density isovalue defining the surface shape (as in \code{G\_draw\_density\_surface}) \\
+\code{'GridSpacing'} / \code{'Padding'} & \code{0.15} / \code{4.0} Bohr & Surface-\emph{shape} grid (auto-expanding padding, as in \code{G\_draw\_mo\_surface}) \\
+\code{'MaxVertices'}    & \code{3000}         & The density mesh is decimated (\textsc{Matlab}'s built-in \code{reducepatch}) to at most this many vertices before the ESP evaluation, since ESP is smooth and a full-resolution mesh (often $>$10000 vertices) is unnecessary and would make it far slower than needed \\
+\code{'CompareTo'}      & \code{[]}           & A second data struct (same requirements as \code{data}). If given, renders $V(\text{CompareTo}) - V(\text{data})$ instead of the absolute ESP of \code{data} alone -- e.g.\ field-on minus field-off. Both ESPs are evaluated independently (own analytic/numerical fallback, nuclear charges, density matrix) at the SAME vertices, built from \code{data}'s density-surface shape only, so the comparison is physically meaningful only if the two structures share the same atomic coordinate frame \\
+\code{'ESPMethod'}      & \code{'auto'}       & \code{'auto'}: analytic when the basis is within scope, else numerical fallback (with notice). \code{'analytic'}: force analytic, erroring on an out-of-scope basis. \code{'numeric'}: force the numerical method regardless of basis \\
+\code{'ESPGridSpacing'} & \code{0.20} Bohr    & \emph{Only used by the numerical method} (auto fallback or forced): spacing of the separate density grid used for the Coulomb sum -- see the accuracy note below \\
+\code{'ESPPadding'}     & \code{6.0} Bohr     & \emph{Numerical method only}: padding for that grid; empirically far less important than \code{'ESPGridSpacing'} \\
+\code{'DistanceFloor'}  & \code{0.5}$\times$\code{'ESPGridSpacing'} & \emph{Numerical method only}: minimum distance used in the Coulomb sum, avoiding a spurious spike when a grid point lands very close to a vertex \\
+\code{'SaveCube'}       & \code{''} (off)     & Filename; if given, \emph{additionally} evaluates ESP on a separate, dedicated volumetric grid (see \code{'CubeSpacing'}/\code{'CubePadding'} -- NOT the surface-shape grid, NOT just the decimated vertices) and writes it to a Gaussian-format \code{.cube} file. This is a genuinely extra computation: ESP is otherwise only ever evaluated at the (few-thousand-at-most) decimated vertices \\
+\code{'CubeSpacing'}    & \code{0.30} Bohr    & Grid spacing for \code{'SaveCube'}, coarser by default than \code{'GridSpacing'}/\code{'ESPGridSpacing'} -- with the analytic method, cost scales roughly with $N_\text{basis}^2$ per point, so a fine cube over many points can be genuinely slow (a 2-million-point safety cap raises a clear error rather than starting an impractically long run) \\
+\code{'CubePadding'}    & \code{4.0} Bohr     & Padding for \code{'SaveCube'} \\
+\code{'PosColor'} / \code{'NegColor'} & blue / red & Standard ESP convention (electrophilic / nucleophilic); with \code{'CompareTo'}, positive/negative \emph{difference} instead \\
+\code{'FaceAlpha'}      & \code{1.0}          & Used as-is with \code{'SurfaceStyle','solid'} (the default here, unlike \code{G\_draw\_mo\_surface}/\code{G\_draw\_density\_surface}'s \code{'transparent'} default -- an ESP map is conventionally an opaque painted surface); overridden to \code{0.55} with \code{'transparent'} unless given explicitly; unused with \code{'grid'}. Also auto-lowered to \code{0.6} with \code{'ShowMolecule',true} + \code{'solid'} (see that entry) \\
+\code{'SurfaceStyle'}   & \code{'solid'}      & \code{'solid'} \textbar\ \code{'transparent'} \textbar\ \code{'grid'} -- as in GaussView. \code{'grid'} draws a wireframe coloured by \emph{interpolating the ESP colormap along the edges} (\code{EdgeColor,'interp'}) rather than a flat colour, since ESP (unlike the density/MO lobes) has no single per-region colour to begin with. The decimated (\code{'MaxVertices'}) vertex set is unchanged by \code{'SurfaceStyle'} -- reduce \code{'MaxVertices'} for a more readable wireframe \\
+\end{argtable}
+
+Returns \code{h.surf}, the coloured surface patch handle.
+
+\begin{tbnote}
+\textbf{The analytic method is validated end-to-end against real
+Gaussian ESP data; the numerical fallback is not publication-grade.} A
+head-to-head comparison against a real Gaussian-generated ESP
+\code{.cube} file (\code{cubegen}, Full Density Matrix option), sampled
+at the \emph{actual} density-isosurface distance range used by this
+function (2.4--4.4~Bohr from the nearest nucleus, the default
+\code{IsoValue=0.001}): the default analytic method gave correlation
+$1.0000000$ and an RMS error of $\sim\!0\%$ of the true $\sim\!0.14$
+Hartree/e signal span; the numerical fallback, at its best-tested
+setting, gave correlation $0.03$ (essentially none) and an RMS error
+$54\%$ of that span. The numerical method's own internal aliasing issue
+that drives this: a uniform grid systematically mis-estimates the raw
+density right at each nuclear cusp (the same phenomenon documented for
+individual MOs in \S\ref{sec:gutil-mo-surface-fn}) -- verified
+separately, the total electron count captured by a naive grid sum
+ranged from $-2\%$ to $+31\%$ depending on \code{'ESPGridSpacing'}
+alone, \emph{non}-monotonically. The density grid is rescaled to the
+exact electron count (\code{data.Nelec}) before the Coulomb sum, which
+removes the dominant, roughly-uniform component of this bias but not
+its remaining atom-to-atom spatial variation -- which is why, even with
+this correction, the numerical method's correlation against real
+Gaussian ESP data is essentially zero at realistic surface distances.
+\textbf{Use the numerical fallback (\code{'ESPMethod','numeric'}, or the
+automatic fallback for Cartesian-D/F/G bases) for a qualitative
+electrophilic/nucleophilic pattern only, never for quantitative ESP
+values.}
+\end{tbnote}
+
+\begin{lstlisting}
+data = G16_fchk_read('4-NTP.fchk');
+G_draw_esp_surface(data);                       % exact, analytic (default)
+G_draw_esp_surface(data, 'MaxVertices', 1500);   % faster, same accuracy
+
+data2 = G16_fchk_read('field_on.fchk');
+G_draw_esp_surface(data, 'CompareTo', data2);    % ESP difference map
+
+G_draw_esp_surface(data, 'SaveCube', 'esp.cube', 'CubeSpacing', 0.5);
+G_draw_esp_surface(data, 'SurfaceStyle', 'grid', 'MaxVertices', 800);
+\end{lstlisting}
+
+See also \code{G\_draw\_density\_surface} (\S\ref{sec:gutil-density-surface}),
+\code{G\_draw\_mo\_surface} (\S\ref{sec:gutil-mo-surface-fn}),
+\code{G09\_fchk\_read}\slash\code{G16\_fchk\_read}.
+
+% -----------------------------------------------------------------------------
+\subsection{G\_draw\_cube\_surface}
+\label{sec:gutil-cube-surface}
+
+\begin{lstlisting}
+h = G_draw_cube_surface(cubefile)
+h = G_draw_cube_surface(cubefile, 'Name', Value, ...)
+h = G_draw_cube_surface(cubefile, 'ColorBy', esp_cubefile, ...)
+\end{lstlisting}
+
+Renders an isosurface straight from a saved Gaussian-format \code{.cube}
+file -- the load-and-replot companion to the other three functions' own
+\code{'SaveCube'} option, and equally happy with a real \code{cubegen}/
+GaussView-generated \code{.cube}. No \code{.fchk} is read and no
+basis-set data is re-evaluated: the scalar field and the atoms are both
+read directly from \code{cubefile} by \code{g\_read\_cube\_file}, and
+\textsc{Matlab}'s own \code{isosurface} is applied to it exactly as the
+other three functions apply it to a freshly-evaluated grid.
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.6cm}{X}
+\code{'ColorBy'}      & \code{''}                  & Path to a SECOND \code{.cube} file. If given, the isosurface SHAPE still comes from \code{cubefile} (a single positive-value envelope, as for a density cube), but each vertex is coloured by trilinearly interpolating the SECOND cube's field there -- reproducing GaussView's classic ``ESP mapped on electron density'' picture from two independently-saved cube files (a density cube as \code{cubefile}, an ESP cube as \code{'ColorBy'}), with no \code{.fchk} needed at all. The two cubes must share an IDENTICAL grid (same origin, spacing, and point counts); a clear error is raised otherwise, rather than silently resampling -- see the tbnote below \\
+\code{'IsoValue'}     & guessed                    & Guessed from \code{cubefile}'s title text: \code{0.001} for a density-like field (title contains ``density''), \code{0.02} for an MO-amplitude cube (negative-\code{Natoms} header, GaussView's own MO default) -- matching \code{G\_draw\_density\_surface}/\code{G\_draw\_mo\_surface}'s own defaults for a cube saved by this toolbox. For anything else (an ESP cube, or an unrecognized/external cube's title) there is no universally sensible default -- \code{'IsoValue'} must then be given explicitly, or a clear error explains why \\
+\code{'SurfaceStyle'} & \code{'transparent'}       & \code{'solid'} \textbar\ \code{'transparent'} \textbar\ \code{'grid'} -- as in the other three functions. With \code{'ColorBy'}, \code{'grid'}'s edges are coloured by interpolating the second cube's field (\code{EdgeColor,'interp'}), like \code{G\_draw\_esp\_surface}; without it, by \code{'PosColor'}/\code{'NegColor'} like the others \\
+\code{'FaceAlpha'}    & \code{0.55}                & As in \code{G\_draw\_density\_surface}/\code{G\_draw\_mo\_surface}: used as-is with \code{'transparent'}, overridden to \code{1.0} with \code{'solid'} unless given explicitly, unused with \code{'grid'} \\
+\code{'PosColor'} / \code{'NegColor'} & blue / red & Lobe colours (no \code{'ColorBy'}), or the diverging-colormap endpoints (with \code{'ColorBy'}) \\
+\code{'MaxVertices'}  & \code{5000}                & The isosurface mesh is decimated (\code{reducepatch}) to at most this many vertices, mainly to bound \code{'ColorBy'} interpolation cost \\
+\code{'ShowMolecule'} & \code{true}                & Overlays a CPK model built directly from the atoms stored IN the cube file -- no \code{.fchk} needed \\
+\code{'ShowLabels'} / \code{'AtomScale'} / \code{'Ax'} / \code{'Verbose'} & as elsewhere & Same meaning as in \code{G\_draw\_mo\_surface} \\
+\end{argtable}
+
+Returns \code{h.pos}/\code{h.neg} (positive/negative lobe patch handles;
+\code{h.neg} is \code{[]} for an unsigned field, or whenever
+\code{'ColorBy'} is given, since that mode always renders a single
+shape-defining lobe).
+
+\begin{tbnote}
+\textbf{Signed-ness and the \code{'ColorBy'} grid requirement.} A field
+is treated as SIGNED (both a $+$\code{IsoValue} and a
+$-$\code{IsoValue} lobe, coloured \code{'PosColor'}/\code{'NegColor'})
+if it is an MO cube, or if its values genuinely span both signs beyond
+numerical noise (an ESP cube loaded alone, for instance, IS signed by
+this rule); otherwise only the single $+$\code{IsoValue} lobe is drawn.
+\code{'ColorBy'} overrides this entirely -- the shape is always the
+single envelope of \code{cubefile}. Because \code{G\_draw\_density\_surface}/
+\code{G\_draw\_mo\_surface} auto-expand \code{'Padding'} when the
+isosurface would otherwise be clipped (\S\ref{sec:gutil-mo-surface-fn}),
+two cubes saved with the same \emph{nominal} \code{'GridSpacing'}/
+\code{'Padding'} can still end up on different grids if only one of them
+triggered that auto-expansion -- verified directly: this is exactly what
+happened on a first attempt at combining a density cube with an ESP
+cube. Pass an \emph{explicit} \code{'Padding'} (which disables
+auto-expansion) matching the ESP cube's \code{'CubePadding'} exactly to
+guarantee identical grids.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{\code{'ColorBy'}'s colour scale matches \code{G\_draw\_esp\_surface}'s
+own convention, not a naive max.} The colour axis is set from the 99th
+percentile of $|\text{colour field}|$ (\code{g\_pctile\_local}, the same
+helper \code{G\_draw\_esp\_surface} itself uses), \emph{not} the raw
+maximum -- verified to matter directly: an earlier version used
+\code{max(abs(\ldots))}, and a single outlier vertex was enough to wash
+out the entire colour scale compared to \code{G\_draw\_esp\_surface}'s
+own rendering of the same data. With the percentile-based fix, the two
+functions' colour axis limits on the same molecule agree to within
+$\sim$0.3\% (the small remainder being ordinary trilinear-interpolation
+error from reading the ESP field off a separately-saved cube grid,
+rather than evaluating it exactly at each surface vertex the way
+\code{G\_draw\_esp\_surface} does internally).
+\end{tbnote}
+
+\begin{lstlisting}
+% Re-plot a density cube saved earlier -- no .fchk needed:
+G_draw_cube_surface('density.cube');
+
+% Re-plot a saved MO cube (sign auto-detected):
+G_draw_cube_surface('homo.cube', 'SurfaceStyle', 'grid');
+
+% Classic "ESP mapped on density" from two independently saved cubes,
+% entirely without re-reading the .fchk:
+G_draw_cube_surface('density.cube', 'ColorBy', 'esp.cube', 'IsoValue', 0.001);
+\end{lstlisting}
+
+See also \code{G\_draw\_density\_surface} (\S\ref{sec:gutil-density-surface}),
+\code{G\_draw\_mo\_surface} (\S\ref{sec:gutil-mo-surface-fn}),
+\code{G\_draw\_esp\_surface} (\S\ref{sec:gutil-esp-surface}).
+
+% -----------------------------------------------------------------------------
+\subsection{Python port (\code{MOSurface/python/})}
+\label{sec:gutil-mo-surface-python}
+
+All four functions above are also ported to Python, as a standalone
+\code{mosurface} package in \code{MOSurface/python/} -- deliberately kept
+as a separate companion rather than folded into the \code{G16parser}
+package itself, so that this real-space isosurface engine (with its own
+heavier dependencies, \code{scipy} and \code{scikit-image}, on top of
+\code{G16parser}'s own \code{numpy}/\code{matplotlib}) does not become a
+hard dependency of the core Python toolbox. Same naming philosophy as
+\code{G16parser}: public functions are prefixed \code{g16\_}
+(\code{g16\_draw\_mo\_surface}, \code{g16\_draw\_density\_surface},
+\code{g16\_draw\_esp\_surface}, \code{g16\_draw\_cube\_surface}), every
+other (leading-underscore) name is an internal helper. Options are the
+same as their MATLAB counterparts, in \code{snake\_case}
+(\code{'IsoValue'} $\to$ \code{isovalue}, \code{'ShowMolecule'} $\to$
+\code{show\_molecule}, \ldots). \code{data} is the \code{Struct}
+returned by \code{G16parser}'s own \code{g16\_fchk\_read} -- the one
+real dependency on \code{G16parser} (for the input struct's shape and
+for the \code{g16\_draw\_molecule} CPK overlay), mirroring
+\code{MOSurface/}'s own dependency on \code{G09\_fchk\_read}/
+\code{G16\_fchk\_read} and \code{G09\_draw\_molecule}/
+\code{G16\_draw\_molecule}.
+
+\begin{tbnote}
+\textbf{Validation.} The numerically critical parts were cross-checked
+directly against the MATLAB original on a real \code{.fchk}
+(4-NTP, 218 basis functions), not just internally self-consistent:
+\code{eval\_mo\_on\_grid}/\code{eval\_density\_on\_grid} (every S/P/SP/
+D/F/G shell, pure and Cartesian) agree with
+\code{g\_eval\_mo\_on\_grid.m}/\code{g\_eval\_density\_on\_grid.m} to
+$\sim$1e-11 relative difference (HOMO/LUMO/HOMO-2/the highest-numbered
+MO, and the total density); the analytic McMurchie-Davidson ESP
+evaluator agrees with \code{g\_eval\_esp\_analytic.m} to $\sim$4e-13
+relative difference; pure D/F/G self-normalization (synthetic
+single-shell self-overlap, fine-grid Riemann sum) converges to
+$1.0000$ for every component of every supported shell; \code{.cube}
+read/write round-trips exactly (to \code{\%.5E} text precision) against
+a brute-force nested-loop reference. All four functions were then run
+end-to-end on real \code{.fchk} files (closed-shell; UKS spin density;
+a field-on/field-off pair for density/ESP difference), producing
+chemically sensible pictures -- e.g.\ the expected SOMO lobe
+perpendicular to the molecular plane for a CH$_3$ radical's spin
+density, and the expected heteroatom-localised electron-rich region in
+ESP-on-density colouring.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Rendering differences from MATLAB (intentional, not a fidelity
+concern).} Isosurface extraction uses
+\code{skimage.measure.marching\_cubes} in place of \code{isosurface}/
+\code{isonormals} (already returns per-vertex normals from the volume
+gradient). Mesh decimation (\code{max\_vertices}) uses a simple
+vertex-clustering simplification instead of \code{reducepatch} -- a
+different, simpler algorithm, fine for a smooth ESP/\code{color\_by}
+field. matplotlib's \code{Poly3DCollection} has no true per-vertex
+Gouraud shading like \code{PATCH}: flat-coloured lobes use
+\code{shade=True} (simple per-face directional shading), and ESP/
+\code{color\_by} surfaces use a per-\emph{face} colour (averaged from
+its 3 vertices) in place of \code{FaceColor,'interp'}.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Performance characteristics (read before using on a large
+system).} Pure-Python/NumPy evaluation is markedly slower than
+MATLAB's compiled engine in two specific ways. (1)~The default
+auto-expanding \code{padding} re-evaluates the \emph{entire} grid on
+every retry (up to 4 attempts, $\times1.6$ each); on a real
+218-basis-function molecule, one retry sequence took several minutes
+where an explicit, sufficient \code{padding}
+(\code{padding\_explicit=True}) took $\sim$4~s -- pass an explicit
+\code{padding} for routine use rather than relying on the auto-expand
+default. (2)~\code{g16\_draw\_esp\_surface}'s analytic ESP evaluation
+has a large \emph{fixed} per-call cost dominated by the number of shell
+\emph{pairs} ($\sim$11~s fixed overhead measured for a 104-subshell
+basis, largely independent of point count) -- fine for the normal case
+(a few thousand \emph{decimated surface vertices}, via
+\code{max\_vertices}), but this makes \code{save\_cube} with the
+analytic method over a \emph{full volumetric grid} (potentially
+hundreds of thousands of points) impractical at realistic resolution,
+unlike MATLAB, where the same feature is merely slow (per
+\code{G\_draw\_esp\_surface.m}'s own ``genuinely slow for a large
+basis'' docstring note) rather than impractical. For \code{save\_cube}
+on \code{g16\_draw\_esp\_surface}, use a deliberately coarse
+\code{cube\_spacing}/small \code{cube\_padding}, or
+\code{esp\_method='numeric'} (faster, less accurate -- see
+G\_DRAW\_ESP\_SURFACE's own ``Accuracy'' notes above, which apply
+unchanged here) if a full-resolution ESP cube is genuinely needed.
+Vectorizing the analytic evaluator's inner shell-pair loop would
+address this but was out of scope for this initial port, which
+prioritized exact numerical fidelity over performance.
+\end{tbnote}
+
+\begin{lstlisting}
+import G16parser as g16
+from mosurface import g16_draw_mo_surface, g16_draw_esp_surface
+
+data = g16.g16_fchk_read('4-NTP.fchk')
+g16_draw_mo_surface(data, 'HOMO')
+g16_draw_esp_surface(data, padding=4.0, padding_explicit=True, max_vertices=1500)
+\end{lstlisting}
+
+\newpage
+
+\section{RamanBrowser: interactive Raman/IR stick-spectrum browser}
+\label{sec:gutil-raman-browser}
+% =============================================================================
+\code{RamanBrowser/} provides a single click-to-select companion to the
+core toolbox's own \code{G16\_modeViewer}/\code{G09\_modeViewer} (text
+drop-down mode selectors): \code{G\_raman\_browser} plots Raman activity
+(or IR intensity) against frequency as a stick spectrum and lets the
+mode be picked by clicking directly on its stick -- often the more
+natural way to pick out ``that strong peak at $\sim$1580~cm$^{-1}$''
+than first reading its value off a list. Unlike the two
+\code{modeViewer}s, which are each tied to one Gaussian major version,
+\code{G\_raman\_browser} is a single function that works with \emph{both}:
+it auto-detects Gaussian 09 vs.\ Gaussian 16 (\S\ref{sec:gutil-raman-browser-fn})
+and dispatches internally to the matching
+\code{G09\_}/\code{G16\_structure}/\code{nmodes}/\code{draw\_mode}
+functions, unchanged, with no core-toolbox modification. A Python port
+also exists (\S\ref{sec:gutil-raman-browser-python}), G16-only.
+
+% -----------------------------------------------------------------------------
+\subsection{G\_raman\_browser}
+\label{sec:gutil-raman-browser-fn}
+
+\begin{lstlisting}
+G_raman_browser(filename)
+G_raman_browser(filename, 'Name', Value, ...)
+\end{lstlisting}
+
+Opens a window with the requested stick spectrum. Clicking anywhere in
+the axes selects the mode whose frequency is nearest the click (a red
+marker highlights it, and an info line above the plot reports its mode
+number, frequency, symmetry, and intensity). A ``Draw mode'' button then
+calls \code{draw\_mode} for the selected mode, opening (or replacing) a
+3D structure figure with its displacement arrows.
+
+For \code{'Property','Raman'} on a file with \code{CPHF=RdFreq} data
+(\code{nm.has\_RamanFr}, \S\ref{sec:gutil-raman-browser-fn}), the info
+line reports \emph{both} the static and the dynamic Raman activity
+instead of a single value, e.g.\ \code{Selected: mode 1, 17.4 cm-1 (A),
+Raman static = 1.74, 785nm = 1.89} -- one \code{, Nnm = ...} term per
+incident wavelength beyond the static one, converted from
+\code{nm.IncidentLight}'s cm$^{-1}$ values. Without \code{CPHF=RdFreq}
+data, or for \code{'Property','IR'}, the line keeps its original
+single-value form (e.g.\ \code{ir = 4.28}).
+
+\begin{argtable}{Option}{Default}{Description}{2.8cm}{2.6cm}{X}
+\code{'Property'}   & \code{'Raman'}  & \code{'Raman'} \textbar\ \code{'IR'} -- which stick intensity to plot. \code{'Raman'} requires the file to actually contain Raman activities (a \code{Freq=Raman} job); a clear error suggests \code{'IR'} instead otherwise \\
+\code{'Scale'}      & \code{1.5}      & Forwarded to \code{draw\_mode} \\
+\code{'AtomScale'}  & \code{0.35}     & Forwarded to \code{draw\_mode} \\
+\code{'ShowLabels'} & \code{false}    & Forwarded to \code{draw\_mode} \\
+\end{argtable}
+
+\begin{tbnote}
+\textbf{Gaussian 09/16 auto-detection.} The Gaussian major version is
+read from the ``Gaussian~NN, Revision~X.YY,'' citation line near the top
+of \code{filename} via \code{G16\_gaussian\_version} (which, despite its
+name, reads this line for any \code{NN}); \code{G09\_structure}/
+\code{G09\_nmodes}/\code{G09\_draw\_mode} are used for a detected
+Gaussian~09 file, \code{G16\_structure}/\code{G16\_nmodes}/
+\code{G16\_draw\_mode} otherwise (including when the version cannot be
+determined at all, matching this function's original, still most
+common, use case). This is safe because the two triples' output
+structs/call signatures are field-for-field and argument-for-argument
+identical -- verified directly on a real Gaussian~09 file
+(\code{CH4\_NBO.LOG}) and a real Gaussian~16 file
+(\code{4-NTP\_nbo.out}) side by side, including a simulated stick click
+on the Gaussian~09 file correctly reaching \code{G09\_draw\_mode}.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Static vs.\ dynamic Raman in the info line.} This relies on
+\code{G09\_nmodes}/\code{G16\_nmodes}'s own \code{.RamanFr}/
+\code{.IncidentLight}/\code{.has\_RamanFr} fields (\S\ref{sec:nmodes-ref})
+-- \code{G\_raman\_browser} adds no
+parsing of its own, it only formats what those functions already
+expose. Verified directly on a real 785~nm job
+(\code{MPBA\_SH.out}): a simulated click on mode~1 produced
+\code{Raman static = 1.74, 785nm = 1.89}, matching \code{nm.Raman(1)}
+and \code{nm.RamanFr(1,2)} exactly; the same click on a file with no
+\code{CPHF=RdFreq} data produced the plain, unchanged
+\code{raman = 0.87} form, with no spurious \code{Nnm = ...} term.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Window placement on multi-monitor systems.} A fixed pixel
+\code{Position} for the browser window can land off-screen entirely on a
+multi-monitor setup whose primary display does not start at virtual
+desktop coordinate $[0,0]$ -- the window is technically created but never
+visibly appears (confirmed directly: this happened on first use, and
+restarting \textsc{Matlab} was the only workaround until fixed). The same
+fix already used by \code{G16\_modeViewer} is applied here: a short-lived
+invisible ordinary \code{figure} is queried for its default placement to
+identify the active monitor from \code{MonitorPositions}, and the browser
+window is then created directly on that monitor in a single atomic call.
+\end{tbnote}
+
+\begin{lstlisting}
+% Browse the Raman spectrum, click a peak, press "Draw mode" (G16 file):
+G_raman_browser('4-NTP.out');
+
+% Browse IR intensities instead, with a larger displacement-arrow scale:
+G_raman_browser('4-NTP.out', 'Property', 'IR', 'Scale', 2);
+
+% Works identically on a Gaussian 09 file, auto-detected:
+G_raman_browser('indaco.log');
+\end{lstlisting}
+
+See also \code{G16\_modeViewer}, \code{G16\_draw\_mode},
+\code{G16\_nmodes}, \code{G16\_structure}, \code{G09\_modeViewer},
+\code{G09\_draw\_mode}, \code{G09\_nmodes}, \code{G09\_structure},
+\code{G16\_gaussian\_version}.
+
+% -----------------------------------------------------------------------------
+\subsection{Python port (\code{RamanBrowser/python/})}
+\label{sec:gutil-raman-browser-python}
+
+\code{G\_raman\_browser} is also ported to Python, as a standalone
+\code{ramanbrowser} package in \code{RamanBrowser/python/} -- same
+separate-companion-package status as \code{MOSurface/python/}'s own
+\code{mosurface} package (kept out of \code{G16parser} itself, see
+\S\ref{sec:gutil-mo-surface-python}), and the
+same naming philosophy: one public function,
+\code{g16\_raman\_browser}, everything else a leading-underscore
+internal helper. \code{tkinter} (with an embedded matplotlib
+\code{FigureCanvasTkAgg}) replaces \code{uifigure}/\code{uiaxes} for the
+click-to-select stick spectrum window, and \code{g16\_draw\_mode}'s own
+matplotlib window (as already used by \code{G16parser}'s
+\code{g16\_mode\_viewer}) is opened by the ``Draw mode'' button, exactly
+mirroring the MATLAB original's behaviour.
+
+\begin{lstlisting}
+from ramanbrowser import g16_raman_browser
+
+g16_raman_browser('4-NTP.out')
+g16_raman_browser('4-NTP.out', property='ir', scale=2)
+\end{lstlisting}
+
+\begin{tbnote}
+\textbf{G16-only (a real scope difference from the MATLAB original).}
+\code{G16parser} only targets Gaussian~16 output (a deliberate,
+documented scope --- \S\ref{sec:gutil-mo-surface-python}'s own note on
+why no \code{G09parser} exists), so this port cannot dispatch to a
+Gaussian~09 parser the way \code{G\_raman\_browser.m} does via
+\code{G09\_structure}/\code{G09\_nmodes}/\code{G09\_draw\_mode} --
+there is nothing on the Python side to dispatch \emph{to}. Passing a
+Gaussian~09 file is unsupported (not silently wrong -- \code{g16\_nmodes}
+still expects Gaussian~16 formatting).
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Static vs.\ dynamic Raman (\code{.RamanFr}), forward-compatible.}
+The info line's static/dynamic Raman split (\S\ref{sec:gutil-raman-browser-fn})
+is read via \code{getattr(nm, 'has\_RamanFr', False)}: since
+\code{G16parser}'s own \code{g16\_nmodes} does not yet expose
+\code{.RamanFr}/\code{.IncidentLight}/\code{.has\_RamanFr} (a separate,
+already-known port gap), this currently always falls back to the plain
+single-value form -- correctly, with no error or spurious output -- and
+will pick up the enhanced display automatically, with no changes needed
+here, once/if that field is ported to \code{G16parser}.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{Validation.} Verified end-to-end with a simulated click
+(a real \code{matplotlib.backend\_bases.MouseEvent}, not just a direct
+function call) on \code{4-NTP\_nbo.out}: selecting the same stick
+produced the identical result as the MATLAB original on the same file
+--- \code{Selected: mode 10, 528.5 cm-1 (A), raman = 0.25} --- and the
+``Draw mode'' button correctly invoked \code{g16\_draw\_mode} with mode
+index 10.
+\end{tbnote}
+
+\newpage
+
+% =============================================================================
 \section{Orbital energy analysis}
 % =============================================================================
 \subsection{G09\_orbital\_energies / G16\_orbital\_energies}
@@ -1838,6 +3030,9 @@ parameter/field documentation. All extraction functions accept an optional
 the file exactly once.
 
 \begin{argtabletwo}{Function}{Description}{3.4cm}{X}
+\code{g16\_au\_convert}       & Converts a physical quantity between atomic units and SI/another common unit (\S\ref{sec:gutil-au2si-python}) \\
+\code{g16\_au\_table}         & Prints a formatted reference table of atomic-unit conversion factors (CODATA 2022) \\
+\code{g16\_gaussian\_\discretionary{}{}{}field\_\discretionary{}{}{}convert} & Converts between Gaussian's \code{Field=X+N} route keyword and a physical field strength \\
 \code{g16\_read\_input}       & Reads a Gaussian \emph{input} file (\code{.gjf}/\code{.com}/\code{.in}): link0 commands, route, title, charge/multiplicity, and starting geometry --- output \code{Struct} is compatible with \code{g16\_draw\_molecule}/\code{g16\_get\_bond\_length} \\
 \code{g16\_structure}         & Molecular geometry (\code{symbols}, \code{xyz} as \code{np.ndarray}, atom count) \\
 \code{g16\_energy}            & SCF energy and thermochemistry \\
@@ -1874,6 +3069,9 @@ the file exactly once.
 \subsection{Selected signatures}
 
 \begin{lstlisting}
+g16_au_convert(value, quantity, direction, target="", verbose=None)
+g16_au_table(section="")
+g16_gaussian_field_convert(value, direction, unit="au", verbose=True)
 g16_read_input(filename)
 g16_available_data(filename)
 g16_structure(filename, orientation="auto", step="last", lines=None)
@@ -2464,6 +3662,62 @@ set(fig, 'Color', [1 1 1]);
 
 exportgraphics(fig, 'test_2_mol_restyled.pdf', 'ContentType', 'vector');
 \end{lstlisting}
+
+\newpage
+
+% =============================================================================
+\section{References}
+% =============================================================================
+Background reading for the physics/mathematics behind
+\code{MOSurface}'s real-space evaluation: Gaussian-type-orbital point
+evaluation (\S\ref{sec:gutil-mo-surface-fn}) and the analytic
+McMurchie-Davidson ESP integrals (\S\ref{sec:gutil-esp-surface}).
+
+\begin{enumerate}[nosep,leftmargin=2.2em]
+\item \label{ref:Boys1950} S.~F.~Boys, ``Electronic Wave Functions I. A
+      General Method of Calculation for the Stationary States of Any
+      Molecular System,'' \emph{Proc.\ R.\ Soc.\ Lond.\ A} \textbf{200},
+      542--554 (1950). --- Introduces Gaussian-type orbitals for
+      molecular electronic structure; origin of the GTO normalization
+      constant used throughout \code{G\_draw\_mo\_surface}.
+\item \label{ref:Helgaker2000} T.~Helgaker, P.~J\o rgensen, J.~Olsen,
+      \emph{Molecular Electronic-Structure Theory}, Wiley (2000). ---
+      Standard graduate reference for Gaussian-type-orbital integrals,
+      the Gaussian product theorem, and solid harmonics; useful
+      background for \S\ref{sec:gutil-mo-surface-fn} and (Ch.~9) the
+      McMurchie-Davidson Hermite-Gaussian integral scheme used by
+      \code{G\_draw\_esp\_surface} (\S\ref{sec:gutil-esp-surface}).
+\item \label{ref:McMurchieDavidson1978} L.~E.~McMurchie, E.~R.~Davidson,
+      ``One- and Two-Electron Integrals over Cartesian Gaussian
+      Functions,'' \emph{J.\ Comp.\ Phys.}\ \textbf{26}, 218--231 (1978).
+      \url{https://doi.org/10.1016/0021-9991(78)90092-X} --- The
+      original Hermite-Gaussian expansion/recursion scheme for analytic
+      Gaussian integrals; the direct source for the exact electronic-ESP
+      evaluation in \code{G\_draw\_esp\_surface}
+      (\S\ref{sec:gutil-esp-surface}).
+\item \label{ref:SchlegelFrisch1995} H.~B.~Schlegel, M.~J.~Frisch,
+      ``Transformation Between Cartesian and Pure Spherical Harmonic
+      Gaussians,'' \emph{Int.\ J.\ Quantum Chem.}\ \textbf{54}, 83--87
+      (1995). \url{https://doi.org/10.1002/qua.560540202} --- The
+      original general formula for Cartesian~$\leftrightarrow$~pure
+      spherical-harmonic Gaussian transformation coefficients, from one
+      of Gaussian's own lead developers.
+\item \label{ref:Ribaldone2024} C.~Ribaldone, J.~K.~Desmarais,
+      ``Spherical to Cartesian Coordinates Transformation for Solid
+      Harmonics Revisited: Construction of the Hartree Potential,''
+      \emph{arXiv:2412.16733} (2024).
+      \url{https://arxiv.org/abs/2412.16733} --- Explicit, tabulated
+      real-solid-harmonic polynomial coefficients up to $\ell=10$; the
+      direct source for the pure D/F/G formulas implemented in
+      \code{G\_draw\_mo\_surface}.
+\item \label{ref:IOData} T.~Verstraelen \emph{et al.}, \emph{IOData}
+      (theochem/iodata), \url{https://github.com/theochem/iodata},
+      \url{https://iodata.readthedocs.io}. --- Reference implementation
+      and documentation of Gaussian's native \code{.fchk} basis-function
+      ordering convention (including the Cartesian $L\!\geq\!4$ shell
+      reversal), used to verify the shell-component ordering in
+      \code{G\_draw\_mo\_surface}.
+\end{enumerate}
 
 \newpage
 

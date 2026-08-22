@@ -1,0 +1,5 @@
+numpy
+scipy
+scikit-image
+matplotlib
+G16parser @ file:../../../G16parser

@@ -1,0 +1,3 @@
+numpy
+matplotlib
+G16parser @ file:../../../G16parser
