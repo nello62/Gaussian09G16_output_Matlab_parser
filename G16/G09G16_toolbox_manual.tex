@@ -1863,6 +1863,7 @@ the file exactly once.
 \code{g16\_batch\_read\_all}  & Runs \code{g16\_read\_all} (+ \code{g16\_orbital\_energies}) over every \code{.log}/\code{.out} file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal \\
 \code{g16\_draw\_molecule}    & 3D CPK ball-and-stick render (matplotlib \code{mplot3d}) \\
 \code{g16\_draw\_mode}        & 3D structure with a vibrational mode's displacement arrows \\
+\code{g16\_draw\_deformation} & 3D structure with displacement arrows between two related geometries of the same molecule (e.g.\ field on/off, two conformers, before/after optimisation) \\
 \code{g16\_draw\_orbital}     & Orbital energy-level diagram with HOMO--LUMO gap arrow \\
 \code{g16\_animate\_mode}     & Exports an MP4 animation of a vibrational mode (requires \code{ffmpeg} on \code{PATH}) \\
 \code{g16\_mode\_viewer}      & Interactive Tkinter window to browse/render vibrational modes, sortable by mode number, IR, or Raman intensity, with an "Animate mode (MP4)..." button \\
@@ -1892,9 +1893,14 @@ g16_charges(filename, type="Mulliken", mode="atom", plot=True,
 g16_draw_molecule(mol, atom_scale=0.35, bond_tol=1.30, show_labels=True,
                   show_legend=True, title="", bg_color=(0.95, 0.95, 0.95),
                   ax=None, show_axes=False, axes_length=None, bond_list=None)
+g16_draw_deformation(mol1, mol2, overlay=False, scale=1, arrow_color=(1.0, 0.4, 0.1),
+                     overlay2_color=(0.75, 0.1, 0.1), atom_scale=0.35, bond_tol=1.30,
+                     show_labels=False, arrow_threshold=0.05)
 g16_animate_mode(mol, nm, mode_idx, filename=None, scale=1.5, flip_sign=False,
                  atom_scale=0.35, bond_tol=1.30, show_labels=False,
-                 frames_per_cycle=30, n_cycles=2, fps=20, view=None)
+                 frames_per_cycle=30, n_cycles=2, fps=20, view=None,
+                 dpi=150, progress_callback=None,
+                 crop=True, crop_margin=12, show_title=False)
 g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
                 show_labels=False, flip_sign=False, arrow_color=None,
                 font_size=10, **extra_opts)
@@ -1962,8 +1968,29 @@ consistent with every other G09-only MATLAB function (e.g.\
 instead), since this package only targets Gaussian 16 output. Note that
 \code{G09\_fchk\_read}/\code{G09\_charges\_fchk} are \emph{not} G09-only
 despite the prefix (identical \code{G16\_} counterparts exist, since the
-\code{.fchk} format itself does not depend on the Gaussian version) --
-they are simply not yet ported to Python either.
+\code{.fchk} format itself does not depend on the Gaussian version) ---
+both were ported to Python (\code{g16\_fchk\_read}/\code{g16\_charges\_fchk})
+alongside their \code{G16\_} counterparts.
+\end{tbnote}
+
+\begin{tbnote}
+\textbf{\code{g16\_animate\_mode}'s frame cropping is implemented
+differently from \code{G09\_animate\_mode.m}/\code{G16\_animate\_mode.m}.}
+MATLAB captures each rendered frame's pixels directly (\code{getframe})
+and crops that array in memory before writing it to \code{VideoWriter}.
+matplotlib's \code{FFMpegWriter} offers no equivalent per-frame pixel
+hook, so the Python port instead (1) renders the two oscillation-extreme
+probe frames to compute the same tight content bounding box (padded by
+\code{crop\_margin}, evened for \code{yuv420p}), (2) writes the full,
+uncropped video to a temporary file exactly as without \code{crop}, then
+(3) runs a single \code{ffmpeg -vf crop=W:H:X:Y} pass over it to produce
+the final, cropped file. This relies on nothing beyond \code{ffmpeg}
+itself (already a hard requirement for MP4 output at all), avoiding both
+a new dependency and any private/internal matplotlib API. Verified
+directly: cropped output is consistently smaller (in both dimensions,
+always even) than the uncropped video of the same mode, and enabling
+\code{show\_title} measurably enlarges the crop's height, matching the
+MATLAB behaviour.
 \end{tbnote}
 
 \begin{tbnote}

@@ -34,6 +34,7 @@ from .restart import g16_restart
 from .batch_read_all import g16_batch_read_all
 from .draw_molecule import g16_draw_molecule
 from .draw_mode import g16_draw_mode
+from .draw_deformation import g16_draw_deformation
 from .draw_orbital import g16_draw_orbital
 from .animate_mode import g16_animate_mode
 from .mode_viewer import g16_mode_viewer
@@ -48,6 +49,6 @@ __all__ = [
     "g16_get_bond_length", "g16_nbo_bonds", "g16_fchk_read", "g16_charges_fchk",
     "g16_hyperpolar", "g16_tddft", "g16_read_all",
     "g16_restart", "g16_batch_read_all",
-    "g16_draw_molecule", "g16_draw_mode", "g16_draw_orbital",
+    "g16_draw_molecule", "g16_draw_mode", "g16_draw_deformation", "g16_draw_orbital",
     "g16_animate_mode", "g16_mode_viewer", "g16_list", "g16_write_report",
 ]
