@@ -1776,7 +1776,7 @@ h = G_draw_density_surface(data, 'SpinDensity', true, ...)
 Renders the total electron density, or (given a second structure via
 \code{'CompareTo'}) a density \emph{difference} map, or (for an
 unrestricted calculation, via \code{'SpinDensity'}) the \emph{spin}
-density $\rho_\alpha-\rho_\beta$ -- the G\_Utility equivalent of
+density $\rho_\alpha-\rho_\beta$ -- a real-space equivalent of
 GaussView's ``Total Density''/``Spin Density'' surface types. It shares
 its real-space evaluation engine with \code{G\_draw\_mo\_surface}
 (\S\ref{sec:gutil-mo-surface-fn}): the density is electron-count-exact,
@@ -1909,7 +1909,7 @@ h = G_draw_esp_surface(data, 'CompareTo', data2, ...)
 
 Renders the molecular electrostatic potential (ESP) mapped onto the
 total-density isosurface (built via \code{G\_draw\_density\_surface}'s
-machinery) -- the G\_Utility equivalent of GaussView's classic ``ESP
+machinery) -- a real-space equivalent of GaussView's classic ``ESP
 mapped on electron density'' surface, showing electrophilic
 (\code{PosColor}, blue, $V>0$) vs.\ nucleophilic (\code{NegColor}, red,
 $V<0$) character:
