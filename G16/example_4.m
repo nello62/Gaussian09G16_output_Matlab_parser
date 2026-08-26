@@ -1,13 +1,22 @@
 %% Example 4
 %% Recover graphics handles from G16_draw_molecule and restyle them
+close all;
+clear all;
 mol = G16_structure('test_2.out');
-G16_draw_molecule(mol, 'Title', 'Violacein');
+G16_draw_molecule(mol, 'Title', 'Violacein (Default Figure)');
+axd  = gca;
+figd = gcf;
+% Default figure from G16_Draw_molecule 
+exportgraphics(figd, 'fig5a.pdf', 'ContentType', 'vector');
+
+
+G16_draw_molecule(mol, 'Title', 'Violacein (Default Figure)');
 
 ax  = gca;
 fig = gcf;
 
 %% 1) Title -- always visible (HandleVisibility default 'on')
-title(ax, 'Violacein (DFT-optimised)', 'FontSize', 13, ...
+title(ax, 'Violacein (Modified Figure)', 'FontSize', 13, ...
       'FontWeight', 'bold', 'Interpreter', 'tex');
 
 %% 2) Axis labels -- G16_draw_molecule calls axis(ax,'off'), so labels
@@ -44,4 +53,4 @@ set(hatomlbl, 'FontSize', 8, 'FontWeight', 'bold');
 set(ax,  'Color', [1 1 1]);
 set(fig, 'Color', [1 1 1]);
 
-exportgraphics(fig, 'test_2_mol_restyled.pdf', 'ContentType', 'vector');
+exportgraphics(fig, 'fig5b.pdf', 'ContentType', 'vector');

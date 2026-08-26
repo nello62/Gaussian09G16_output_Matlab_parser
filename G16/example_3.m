@@ -1,20 +1,22 @@
-%% G16 Toolbox — Example #3: Energetics
+%% G16 Toolbox — Example #3: Energetics and orbital/density analysis
 %
-%   Demonstrates G16_orbital_energies, G16_energy, and G16_convergence
-%   on a real DFT calculation, then combines their results into a
-%   one-line summary — a small taste of what G16_read_all/
-%   G16_write_report do at full scale across every extraction function.
-%   Also renders the HOMO-LUMO diagram via G16_draw_orbital.
+%   Demonstrates a compact energetics + MO workflow on a real DFT
+%   calculation:
+%     1) G16_orbital_energies + G16_draw_orbital — HOMO-LUMO gap/diagram
+%     2) G16_energy, G16_convergence             — thermochemistry, status
+%     3) G_draw_density_surface + G_draw_mo_surface (MOSurface) —
+%        real-space total electron density and HOMO/LUMO shape
 %
-%   Data file: test_2.out — DFT geometry optimisation of Violacein.
+%   Data files: test_2.out (steps 1-4) and V_E00t.fchk, the same
+%   Violacein calculation's formatted checkpoint, needed for step 5
+%   since MOSurface requires basis-set/MO-coefficient data not present
+%   in a plain .out file.
 %   Reference: G. Cassone et al., Phys. Chem. Chem. Phys.,
 %              doi: 10.1039/d6cp01164k
 %
-%   Requirements: G16/ on the MATLAB path, test_2.out in the current
-%   folder. Each function already prints its own formatted summary to
-%   the command window (shown below as a reference for what to expect
-%   on this file); this script does not repeat those printouts. Running
-%   it creates test_2_orbital_diagram.pdf in the current folder.
+%   Requirements: G16/ and G_Utility/MOSurface/ on the MATLAB path,
+%   test_2.out and V_E00t.fchk in the current folder. Running this
+%   script creates fig4a.pdf-fig4d.pdf (Fig. 4a-d of the manuscript).
 
 clear; close all; clc
 filename = 'test_2.out';
@@ -28,7 +30,7 @@ oe = G16_orbital_energies(filename);
 
 % Orbital energy-level diagram (title defaults to the source filename)
 G16_draw_orbital(oe);
-exportgraphics(gcf, 'test_2_orbital_diagram.pdf', 'ContentType', 'vector');
+exportgraphics(gcf, 'fig4a.pdf', 'ContentType', 'vector');
 %% 2) Energy and thermochemistry — detailed data in the en structure
 en = G16_energy(filename);
 % Console output for this file:
@@ -65,3 +67,18 @@ else
     fprintf('  Gibbs energy  : n/a (no frequency/thermochemistry job)\n');
 end
 fprintf('  Converged     : %s\n', conv_label);
+
+%% 5) Total electron density and HOMO/LUMO orbital shapes (MOSurface)
+% Requires the raw basis-set/MO-coefficient data stored in a formatted
+% checkpoint file -- not available from test_2.out itself, so a separate
+% .fchk from the same Violacein field-dependent series is used here.
+fchk_data = G16_fchk_read('V_E00t.fchk');
+
+G_draw_density_surface(fchk_data);
+exportgraphics(gcf, 'fig4b.pdf', 'ContentType', 'vector');
+
+G_draw_mo_surface(fchk_data, 'HOMO');
+exportgraphics(gcf, 'fig4c.pdf', 'ContentType', 'vector');
+
+G_draw_mo_surface(fchk_data, 'LUMO');
+exportgraphics(gcf, 'fig4d.pdf', 'ContentType', 'vector');
