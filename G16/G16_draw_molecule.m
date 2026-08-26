@@ -35,6 +35,13 @@ function G16_draw_molecule(mol, varargin)
 %                        so bonds do not appear/disappear or flicker
 %                        between single/double/triple as instantaneous
 %                        distances change.
+%       'SingleBondsOnly' - if true, every bond is drawn as a single line
+%                        regardless of its classified or supplied order
+%                        (default: false). Overrides both the geometric
+%                        classification and any 3rd-column order in
+%                        'BondList'; use this for a plain skeletal
+%                        rendering style without double/triple-bond
+%                        visual distinction.
 %
 %   Bond order (single/double/triple) is estimated purely from bond
 %   length for C-C and C-O pairs (any other element pair, including C-N,
@@ -59,6 +66,7 @@ function G16_draw_molecule(mol, varargin)
 %       G16_draw_molecule(mol)
 %       G16_draw_molecule(mol, 'ShowLabels', false, 'AtomScale', 0.4)
 %       G16_draw_molecule(mol, 'ShowAxes', true)
+%       G16_draw_molecule(mol, 'SingleBondsOnly', true)
 %
 %   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
 %   Email: sebastiano.trusso@cnr.it
@@ -79,6 +87,7 @@ addParameter(p, 'Ax',         [],                @ishandle);
 addParameter(p, 'ShowAxes',   false,             @islogical);
 addParameter(p, 'AxesLength', [],                @isnumeric);
 addParameter(p, 'BondList',   [],                @isnumeric);
+addParameter(p, 'SingleBondsOnly', false,         @islogical);
 parse(p, mol, varargin{:});
 
 atom_scale   = p.Results.AtomScale;
@@ -91,6 +100,7 @@ ax           = p.Results.Ax;
 show_axes    = p.Results.ShowAxes;
 axes_length  = p.Results.AxesLength;
 bond_list    = p.Results.BondList;
+single_bonds_only = p.Results.SingleBondsOnly;
 
 % Validate mol struct
 if ~isstruct(mol) || ~isfield(mol,'symbols') || ~isfield(mol,'xyz')
@@ -176,7 +186,11 @@ if isempty(bond_list)
             rj = get_radius_local(mol.symbols{j}, cov_radii, default_radius);
             d  = norm(mol.xyz(i,:) - mol.xyz(j,:));
             if d < (ri + rj) * bond_tol
-                order = classify_bond_order(mol.symbols{i}, mol.symbols{j}, d);
+                if single_bonds_only
+                    order = 1;
+                else
+                    order = classify_bond_order(mol.symbols{i}, mol.symbols{j}, d);
+                end
                 draw_bond_lines(ax, mol.xyz(i,:), mol.xyz(j,:), order, bond_color);
             end
         end
@@ -185,7 +199,9 @@ else
     for b = 1 : size(bond_list, 1)
         i = bond_list(b, 1);
         j = bond_list(b, 2);
-        if size(bond_list, 2) >= 3
+        if single_bonds_only
+            order = 1;
+        elseif size(bond_list, 2) >= 3
             order = bond_list(b, 3);   % pre-computed (e.g. by G16_animate_mode, to
                                         % keep the order fixed across frames)
         else
