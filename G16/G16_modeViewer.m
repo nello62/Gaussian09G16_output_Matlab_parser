@@ -39,6 +39,7 @@ function G16_modeViewer(filename, varargin)
 
 % -------------------------------------------------------------------------
 % ---- load structure and normal modes -----------------------------------
+
 if ~(ischar(filename) || (isstring(filename) && isscalar(filename)))
     error('G16_modeViewer:invalidInput', ...
         ['G16_modeViewer expects a Gaussian output FILENAME (char/string), not a ', ...
@@ -138,6 +139,7 @@ selY = max(scr(2) + 40, scr(2) + scr(4) - panelH - 80);   % near top-left, leavi
 
 selFig = uifigure('Name', sprintf('G16 Normal Mode Viewer - %s', filename), ...
                    'Position', [selX selY panelW panelH]);
+
 selFig.CloseRequestFcn = @(src, evt) closeViewer();
 
 uilabel(selFig, 'Position', [20 514 420 22], ...
