@@ -48,7 +48,7 @@ def g16_draw_mo_surface(data, mo_index, mode="surface", plane="auto", plane_offs
     negative lobes) or 2D nodal contour map.
 
     data : Struct/dict as returned by G16parser's g16_fchk_read. Required
-        attributes: filename, mol, Nbasis, alpha_MO_coeff, xyz_bohr.
+        attributes: filename, mol, Nbasis, Nbasis_indep, alpha_MO_coeff, xyz_bohr.
         Optional: HOMO_idx, alpha_orb_energies (title/HOMO-LUMO tagging).
     mo_index : positive int (1-based MO column), or 'HOMO'/'LUMO'/
         'HOMO-n'/'LUMO+n' (resolved against data.HOMO_idx).
@@ -84,7 +84,7 @@ def g16_draw_mo_surface(data, mo_index, mode="surface", plane="auto", plane_offs
     if save_cube and mode == "contour":
         raise ValueError("g16_draw_mo_surface: save_cube needs the full 3D grid built in mode='surface' -- not available in mode='contour'.")
 
-    for req in ("filename", "mol", "Nbasis", "alpha_MO_coeff", "xyz_bohr"):
+    for req in ("filename", "mol", "Nbasis", "Nbasis_indep", "alpha_MO_coeff", "xyz_bohr"):
         if not hasattr(data, req):
             raise ValueError(f"g16_draw_mo_surface: data must be the Struct returned by g16_fchk_read (missing '{req}').")
 
@@ -94,9 +94,9 @@ def g16_draw_mo_surface(data, mo_index, mode="surface", plane="auto", plane_offs
     check_supported_shells(aobasis["shell_types"])
 
     homo_idx = getattr(data, "HOMO_idx", None)
-    idx = _resolve_mo_index(mo_index, homo_idx, data.Nbasis)
+    idx = _resolve_mo_index(mo_index, homo_idx, data.Nbasis_indep)
 
-    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis, order="F")
+    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis_indep, order="F")
     mo_col = alpha_MO[:, idx - 1:idx]
 
     xyz_bohr = np.asarray(data.xyz_bohr)

@@ -20,7 +20,7 @@ _A0 = 0.529177210544  # Bohr -> Angstrom (CODATA)
 
 
 def _validate_and_prepare(data, argname):
-    for req in ("filename", "mol", "Nbasis", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta"):
+    for req in ("filename", "mol", "Nbasis", "Nbasis_indep", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta"):
         if not hasattr(data, req):
             raise ValueError(f"g16_draw_density_surface: {argname} must be the Struct returned by g16_fchk_read (missing '{req}').")
     if data.Nalpha != data.Nbeta:
@@ -32,20 +32,20 @@ def _validate_and_prepare(data, argname):
     if aobasis["shell_types"].size == 0:
         raise ValueError(f"g16_draw_density_surface: no basis-set sections found in {data.filename} ({argname}).")
     check_supported_shells(aobasis["shell_types"])
-    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis, order="F")
+    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis_indep, order="F")
     occ_coeff = alpha_MO[:, :data.Nalpha]
     return aobasis, occ_coeff
 
 
 def _validate_and_prepare_spin(data, argname):
-    for req in ("filename", "mol", "Nbasis", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta"):
+    for req in ("filename", "mol", "Nbasis", "Nbasis_indep", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta"):
         if not hasattr(data, req):
             raise ValueError(f"g16_draw_density_surface: {argname} must be the Struct returned by g16_fchk_read (missing '{req}').")
     aobasis = read_aobasis_from_fchk(data.filename)
     if aobasis["shell_types"].size == 0:
         raise ValueError(f"g16_draw_density_surface: no basis-set sections found in {data.filename} ({argname}).")
     check_supported_shells(aobasis["shell_types"])
-    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis, order="F")
+    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis_indep, order="F")
     occ_alpha = alpha_MO[:, :data.Nalpha]
 
     beta_vec = read_fchk_scalar_or_section(data.filename, "Beta MO coefficients")
@@ -54,12 +54,13 @@ def _validate_and_prepare_spin(data, argname):
             f"g16_draw_density_surface: spin_density requires an unrestricted (UHF/UKS) "
             f"calculation, but no 'Beta MO coefficients' section was found in {data.filename} ({argname})."
         )
-    if beta_vec.size != data.Nbasis ** 2:
+    expected = data.Nbasis * data.Nbasis_indep
+    if beta_vec.size != expected:
         raise ValueError(
             f"g16_draw_density_surface: 'Beta MO coefficients' section in {data.filename} has "
-            f"{beta_vec.size} entries, expected {data.Nbasis**2} (Nbasis^2)."
+            f"{beta_vec.size} entries, expected {expected} (Nbasis*Nbasis_indep)."
         )
-    beta_MO = beta_vec.reshape(data.Nbasis, data.Nbasis, order="F")
+    beta_MO = beta_vec.reshape(data.Nbasis, data.Nbasis_indep, order="F")
     occ_beta = beta_MO[:, :data.Nbeta]
     return aobasis, occ_alpha, occ_beta
 

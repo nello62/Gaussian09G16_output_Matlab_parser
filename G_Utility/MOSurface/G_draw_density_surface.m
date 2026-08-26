@@ -578,7 +578,7 @@ function [aobasis, occ_coeff] = validate_and_prepare(data, argname)
 %   or a 'CompareTo' struct), re-reads its raw basis-set data, checks it
 %   is closed-shell, and returns the occupied-MO coefficient matrix
 %   [Nbasis x Nalpha] (columns 1:Nalpha of the reshaped alpha_MO_coeff).
-    required = {'filename', 'mol', 'Nbasis', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta'};
+    required = {'filename', 'mol', 'Nbasis', 'Nbasis_indep', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta'};
     for k = 1:numel(required)
         if ~isfield(data, required{k})
             error('G_draw_density_surface: %s must be the struct returned by G09_fchk_read/G16_fchk_read (missing "%s" field).', argname, required{k});
@@ -597,7 +597,7 @@ function [aobasis, occ_coeff] = validate_and_prepare(data, argname)
     end
     g_check_supported_shells(aobasis.shell_types);
 
-    alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis);
+    alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep);
     occ_coeff = alpha_MO(:, 1:data.Nalpha);
 end
 
@@ -636,7 +636,7 @@ function [aobasis, occ_alpha, occ_beta] = validate_and_prepare_spin(data, argnam
 %   .fchk never writes this section (alpha and beta MOs are identical by
 %   construction), so its absence is used here as the actual open-shell
 %   test, not Nalpha~=Nbeta.
-    required = {'filename', 'mol', 'Nbasis', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta'};
+    required = {'filename', 'mol', 'Nbasis', 'Nbasis_indep', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta'};
     for k = 1:numel(required)
         if ~isfield(data, required{k})
             error('G_draw_density_surface: %s must be the struct returned by G09_fchk_read/G16_fchk_read (missing "%s" field).', argname, required{k});
@@ -652,28 +652,29 @@ function [aobasis, occ_alpha, occ_beta] = validate_and_prepare_spin(data, argnam
     end
     g_check_supported_shells(aobasis.shell_types);
 
-    alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis);
+    alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep);
     occ_alpha = alpha_MO(:, 1:data.Nalpha);
 
-    beta_vec = read_beta_mo_coeff(data.filename, data.Nbasis);
+    beta_vec = read_beta_mo_coeff(data.filename, data.Nbasis, data.Nbasis_indep);
     if isempty(beta_vec)
         error('G_draw_density_surface: ''SpinDensity'' requires an unrestricted (UHF/UKS) calculation, but no "Beta MO coefficients" section was found in %s (%s) -- a restricted (RHF/RKS) job has identical alpha/beta orbitals and zero spin density everywhere.', data.filename, argname);
     end
-    beta_MO = reshape(beta_vec, data.Nbasis, data.Nbasis);
+    beta_MO = reshape(beta_vec, data.Nbasis, data.Nbasis_indep);
     occ_beta = beta_MO(:, 1:data.Nbeta);
 end
 
-function vals = read_beta_mo_coeff(filename, Nbasis)
+function vals = read_beta_mo_coeff(filename, Nbasis, Nbasis_indep)
 %READ_BETA_MO_COEFF  Reads the .fchk "Beta MO coefficients" section
 %   directly (a minimal, single-purpose parser, in the same
 %   self-contained spirit as G_READ_AOBASIS_FROM_FCHK/
 %   G_draw_esp_surface's READ_NUCLEAR_CHARGES) -- present only for an
 %   unrestricted (UHF/UKS) calculation. Returns [] (not an error) if the
 %   section is absent, so the caller can distinguish "restricted
-%   calculation" from a malformed file. VALS is the flat [Nbasis^2 x 1]
-%   vector, same column-major convention as data.alpha_MO_coeff
-%   (reshape(vals, Nbasis, Nbasis) gives the coefficient matrix, columns
-%   = MOs).
+%   calculation" from a malformed file. VALS is the flat
+%   [Nbasis*Nbasis_indep x 1] vector, same column-major convention as
+%   data.alpha_MO_coeff (reshape(vals, Nbasis, Nbasis_indep) gives the
+%   coefficient matrix, columns = MOs; Nbasis_indep may be less than
+%   Nbasis if Gaussian dropped near-linear-dependent combinations).
     fid = fopen(filename, 'r');
     raw = fread(fid, '*char')';
     fclose(fid);
@@ -701,8 +702,9 @@ function vals = read_beta_mo_coeff(filename, Nbasis)
         end
         vals = v(1:min(end,nvals));
         vals = vals(:);
-        if numel(vals) ~= Nbasis^2
-            error('G_draw_density_surface: "Beta MO coefficients" section in %s has %d entries, expected %d (Nbasis^2).', filename, numel(vals), Nbasis^2);
+        expected = Nbasis * Nbasis_indep;
+        if numel(vals) ~= expected
+            error('G_draw_density_surface: "Beta MO coefficients" section in %s has %d entries, expected %d (Nbasis*Nbasis_indep).', filename, numel(vals), expected);
         end
         return
     end

@@ -8,7 +8,7 @@ function rho = g_eval_density_on_grid(aobasis, occ_coeff, grid_pts_bohr, occ_fac
 %   rho = g_eval_density_on_grid(aobasis, occ_coeff, grid_pts_bohr, occ_factor)
 %
 %   occ_coeff: [Nbasis x Nocc] occupied MO coefficient columns (e.g.
-%   reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis)(:,1:data.Nalpha)).
+%   reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep)(:,1:data.Nalpha)).
 %   occ_factor: occupation number per orbital column (default: 2, closed-
 %   shell double occupancy); pass 1 for a single alpha- or beta-spin
 %   channel (e.g. spin density = rho_alpha(occ_factor=1) -

@@ -23,12 +23,15 @@ function h = G_draw_mo_surface(data, mo_index, varargin)
 %   Input:
 %       data      - struct returned by G09_FCHK_READ or G16_FCHK_READ.
 %                   Required fields: .filename, .mol, .Nbasis,
-%                   .alpha_MO_coeff, .xyz_bohr. Optional: .HOMO_idx,
-%                   .alpha_orb_energies (used only for 'HOMO'/'LUMO'
-%                   index resolution and the default title).
+%                   .Nbasis_indep, .alpha_MO_coeff, .xyz_bohr. Optional:
+%                   .HOMO_idx, .alpha_orb_energies (used only for
+%                   'HOMO'/'LUMO' index resolution and the default title).
 %       mo_index  - which MO to render, either:
 %                     * a positive integer (1-based column of
-%                       reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis))
+%                       reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep) --
+%                       Nbasis_indep may be less than Nbasis if Gaussian
+%                       dropped near-linear-dependent combinations, e.g.
+%                       with a diffuse basis set on a larger molecule)
 %                     * 'HOMO', 'LUMO', 'HOMO-n', 'LUMO+n' (n = integer),
 %                       resolved against data.HOMO_idx
 %
@@ -254,7 +257,7 @@ end
 % -------------------------------------------------------------------------
 % Validate input struct
 % -------------------------------------------------------------------------
-required = {'filename', 'mol', 'Nbasis', 'alpha_MO_coeff', 'xyz_bohr'};
+required = {'filename', 'mol', 'Nbasis', 'Nbasis_indep', 'alpha_MO_coeff', 'xyz_bohr'};
 for k = 1:numel(required)
     if ~isfield(data, required{k})
         error('G_draw_mo_surface: data must be the struct returned by G09_fchk_read/G16_fchk_read (missing "%s" field).', required{k});
@@ -275,9 +278,9 @@ homo_idx = [];
 if isfield(data, 'HOMO_idx')
     homo_idx = data.HOMO_idx;
 end
-idx = resolve_mo_index(mo_index, homo_idx, data.Nbasis);
+idx = resolve_mo_index(mo_index, homo_idx, data.Nbasis_indep);
 
-alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis);   % columns = MOs
+alpha_MO = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep);   % columns = MOs
 mo_col   = alpha_MO(:, idx);
 
 a0 = 0.529177210544;   % Bohr -> Angstrom (CODATA), consistent with the toolbox

@@ -674,7 +674,7 @@ function [aobasis, occ_coeff, P_density, nuclear_charges] = validate_and_prepare
 %   numerical fallback need: the AO basis, the occupied-MO coefficient
 %   matrix [Nbasis x Nalpha], the density matrix P = 2*occ_coeff*occ_coeff',
 %   and the ECP-consistent nuclear charges (see READ_NUCLEAR_CHARGES).
-    required = {'filename', 'mol', 'Nbasis', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta', 'Nelec'};
+    required = {'filename', 'mol', 'Nbasis', 'Nbasis_indep', 'alpha_MO_coeff', 'xyz_bohr', 'Nalpha', 'Nbeta', 'Nelec'};
     for k = 1:numel(required)
         if ~isfield(data, required{k})
             error('G_draw_esp_surface: %s must be the struct returned by G09_fchk_read/G16_fchk_read (missing "%s" field).', argname, required{k});
@@ -693,7 +693,7 @@ function [aobasis, occ_coeff, P_density, nuclear_charges] = validate_and_prepare
     end
     g_check_supported_shells(aobasis.shell_types);
 
-    alpha_MO  = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis);
+    alpha_MO  = reshape(data.alpha_MO_coeff, data.Nbasis, data.Nbasis_indep);
     occ_coeff = alpha_MO(:, 1:data.Nalpha);
     P_density = 2 * (occ_coeff * occ_coeff');
 

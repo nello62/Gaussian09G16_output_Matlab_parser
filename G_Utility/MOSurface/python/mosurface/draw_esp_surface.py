@@ -31,7 +31,7 @@ def _read_nuclear_charges(filename, natoms):
 
 
 def _validate_and_prepare(data, argname):
-    for req in ("filename", "mol", "Nbasis", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta", "Nelec"):
+    for req in ("filename", "mol", "Nbasis", "Nbasis_indep", "alpha_MO_coeff", "xyz_bohr", "Nalpha", "Nbeta", "Nelec"):
         if not hasattr(data, req):
             raise ValueError(f"g16_draw_esp_surface: {argname} must be the Struct returned by g16_fchk_read (missing '{req}').")
     if data.Nalpha != data.Nbeta:
@@ -42,7 +42,7 @@ def _validate_and_prepare(data, argname):
         raise ValueError(f"g16_draw_esp_surface: no basis-set sections found in {data.filename} ({argname}).")
     check_supported_shells(aobasis["shell_types"])
 
-    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis, order="F")
+    alpha_MO = np.asarray(data.alpha_MO_coeff).reshape(data.Nbasis, data.Nbasis_indep, order="F")
     occ_coeff = alpha_MO[:, :data.Nalpha]
     P_density = 2 * (occ_coeff @ occ_coeff.T)
     nuclear_charges = _read_nuclear_charges(data.filename, data.mol.Natoms)
