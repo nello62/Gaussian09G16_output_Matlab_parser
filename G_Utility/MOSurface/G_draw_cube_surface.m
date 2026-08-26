@@ -333,14 +333,11 @@ else
     end
 end
 
-axis(ax, 'equal');
-axis(ax, 'off');
-view(ax, 3);
-lighting(ax, 'gouraud');
-material(ax, 'dull');
-camlight(ax, 'headlight');
-camlight(ax, 45, 30);
-
+% Lighting/view setup delegated to G09/G16_draw_molecule when
+% 'ShowMolecule' is true, to avoid setting up two independent pairs of
+% CAMLIGHTs (this function's own, plus draw_molecule's) -- which would
+% over-brighten the surface relative to G_draw_mo_surface/
+% G_draw_density_surface (see their own identical if/else pattern).
 if show_mol
     mol.Natoms  = numel(atomic_numbers);
     mol.symbols = arrayfun(@atomic_symbol, atomic_numbers, 'UniformOutput', false);
@@ -355,10 +352,17 @@ if show_mol
     end
     draw_mol_fcn(mol, 'Ax', ax, 'ShowLabels', show_labels, ...
         'AtomScale', atom_scale, 'ShowLegend', true, 'Title', '');
+else
+    axis(ax, 'equal');
+    axis(ax, 'off');
+    view(ax, 3);
+    lighting(ax, 'gouraud');
+    material(ax, 'dull');
+    camlight(ax, 'headlight');
+    camlight(ax, 45, 30);
+    axis(ax, 'tight');
+    camproj(ax, 'perspective');
 end
-
-axis(ax, 'tight');
-camproj(ax, 'perspective');
 
 if isempty(fig_title)
     fig_title = sprintf('%s (iso=%.3g)', title_line, isoval);
