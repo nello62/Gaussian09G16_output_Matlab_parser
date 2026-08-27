@@ -379,3 +379,90 @@ def read_cube_file(filename):
         "title_line": title_line,
         "comment_line": comment_line,
     }
+
+
+def cube_grid_params(cubefile):
+    """Recovers the grid spacing and padding used to build a .cube file,
+    so a companion cube (e.g. for g16_draw_cube_surface's color_by,
+    which requires two cubes to share an identical grid) can be
+    regenerated with a matching grid_spacing/padding (or
+    cube_spacing/cube_padding for g16_draw_esp_surface's own save_cube
+    grid) without having to note them down manually.
+
+    Works on any axis-aligned, uniformly-spaced .cube file containing
+    atoms -- one written by this package's write_cube_file (via any
+    g16_draw_*_surface save_cube option), or a real cubegen/GaussView
+    cube.
+
+    Returns a dict with keys:
+        grid_spacing      - float, Bohr (the cube's step size; raises
+                             ValueError if dx/dy/dz differ by more than
+                             1e-6 Bohr, i.e. the cube is not isotropic)
+        padding            - float, Bohr: the mean of the six per-face
+                             paddings below -- the value to pass back as
+                             padding/cube_padding for a matching cube
+        padding_per_face   - (2,3) ndarray, Bohr: [low;high] x [x,y,z],
+                             the raw per-face (grid boundary minus atom
+                             bounding box) distances padding was averaged
+                             from. A warning is printed if these differ
+                             by more than one grid_spacing, since this
+                             package's own grids always use the SAME
+                             padding on every side -- a wide spread here
+                             means the cube was not built that way, and
+                             padding alone will not exactly reproduce it.
+        npoints            - (Nx, Ny, Nz)
+        origin_bohr        - (3,) ndarray
+
+    Example (matching grid for g16_draw_cube_surface's color_by):
+        p = cube_grid_params('density.cube')
+        g16_draw_esp_surface(data, save_cube='esp.cube',
+            cube_spacing=p['grid_spacing'], cube_padding=p['padding'])
+        g16_draw_cube_surface('density.cube', color_by='esp.cube')
+    """
+    d = read_cube_file(cubefile)
+    gx, gy, gz = d["gx"], d["gy"], d["gz"]
+    xyz_bohr = d["xyz_bohr"]
+
+    dx = gx[1] - gx[0]
+    dy = gy[1] - gy[0]
+    dz = gz[1] - gz[0]
+    if max(abs(dx - dx), abs(dy - dx), abs(dz - dx)) > 1e-6:
+        raise ValueError(
+            f"cube_grid_params: {cubefile} has different spacing along x/y/z "
+            f"({dx:.6g}/{dy:.6g}/{dz:.6g} Bohr) -- not an isotropic grid as "
+            "written by this package."
+        )
+    spacing = dx
+
+    if xyz_bohr.shape[0] == 0:
+        raise ValueError(
+            f"cube_grid_params: {cubefile} has no atoms -- cannot recover "
+            "padding (only grid_spacing)."
+        )
+
+    atom_lo = xyz_bohr.min(axis=0)
+    atom_hi = xyz_bohr.max(axis=0)
+    grid_lo = np.array([gx[0], gy[0], gz[0]])
+    grid_hi = np.array([gx[-1], gy[-1], gz[-1]])
+
+    pad_lo = atom_lo - grid_lo
+    pad_hi = grid_hi - atom_hi
+    pad_all = np.vstack([pad_lo, pad_hi])   # (2,3)
+
+    padding = float(pad_all.mean())
+    if pad_all.max() - pad_all.min() > spacing:
+        print(
+            f"cube_grid_params: WARNING {cubefile}: the six face paddings vary "
+            f"by more than one grid step ({pad_all.min():.3g} to "
+            f"{pad_all.max():.3g} Bohr) -- this cube may not have been built "
+            "with a single uniform padding value; the returned padding "
+            f"({padding:.3g} Bohr, the mean) may not exactly reproduce this grid."
+        )
+
+    return {
+        "grid_spacing": spacing,
+        "padding": padding,
+        "padding_per_face": pad_all,
+        "npoints": (len(gx), len(gy), len(gz)),
+        "origin_bohr": grid_lo,
+    }
