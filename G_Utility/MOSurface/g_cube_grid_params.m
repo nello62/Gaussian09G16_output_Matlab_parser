@@ -82,18 +82,29 @@ atom_hi = max(xyz_bohr, [], 1);
 grid_lo = [gx(1), gy(1), gz(1)];
 grid_hi = [gx(end), gy(end), gz(end)];
 
-pad_lo  = atom_lo - grid_lo;   % [1x3]
-pad_hi  = grid_hi - atom_hi;   % [1x3]
-pad_all = [pad_lo; pad_hi];    % [2x3]
+pad_lo  = atom_lo - grid_lo;   % [1x3] -- EXACT by construction: every
+                                % G_DRAW_*_SURFACE/G_WRITE_CUBE_FILE caller
+                                % builds its grid as lo = atom_lo - Padding,
+                                % so this recovers the true original value.
+pad_hi  = grid_hi - atom_hi;   % [1x3] -- <= Padding: the colon-range
+                                % (lo:spacing:hi) stops at the last point
+                                % AT or BELOW hi, so this side is generally
+                                % a slight UNDERESTIMATE of Padding by up
+                                % to one grid step -- expected, not an error.
+pad_all = [pad_lo; pad_hi];    % [2x3], kept for diagnostics only
 
-padding = mean(pad_all(:));
-if max(pad_all(:)) - min(pad_all(:)) > spacing
+padding = mean(pad_lo);   % use the exact low-side value, not pad_hi/mean(pad_all(:)),
+                          % so that feeding this back as 'Padding' reproduces
+                          % the SAME grid_lo (and hence the same gx/gy/gz)
+                          % bit-for-bit -- required for G_DRAW_CUBE_SURFACE's
+                          % 'ColorBy' to see two identical grids.
+if max(pad_lo) - min(pad_lo) > spacing
     warning('g_cube_grid_params:nonUniformPadding', ...
-        ['%s: the six face paddings vary by more than one grid step ' ...
-         '(%.3g to %.3g Bohr) -- this cube may not have been built with ' ...
-         'a single uniform ''Padding'' value; the returned Padding ' ...
-         '(%.3g Bohr, the mean) may not exactly reproduce this grid.'], ...
-        cubefile, min(pad_all(:)), max(pad_all(:)), padding);
+        ['%s: the low-side padding varies by more than one grid step across ' ...
+         'x/y/z (%.3g to %.3g Bohr) -- this cube was likely not built with a ' ...
+         'single uniform ''Padding'' value; the returned Padding (%.3g Bohr) ' ...
+         'may not exactly reproduce this grid.'], ...
+        cubefile, min(pad_lo), max(pad_lo), padding);
 end
 
 params.GridSpacing    = spacing;

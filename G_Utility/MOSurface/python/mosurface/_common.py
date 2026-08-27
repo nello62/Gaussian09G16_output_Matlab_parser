@@ -461,18 +461,26 @@ def cube_grid_params(cubefile):
     grid_lo = np.array([gx[0], gy[0], gz[0]])
     grid_hi = np.array([gx[-1], gy[-1], gz[-1]])
 
+    # pad_lo is EXACT by construction: every g16_draw_*_surface/
+    # write_cube_file caller builds its grid as grid_lo = atom_lo -
+    # padding, so this recovers the true original value. pad_hi is only
+    # an underestimate (by up to one grid step), since the numpy.arange
+    # grid stops at the last point at or below grid_hi -- expected, not
+    # an error, and NOT used for the returned padding (using it, or its
+    # mean with pad_lo, would fail to reproduce the same grid_lo when
+    # fed back in, breaking g16_draw_cube_surface's color_by).
     pad_lo = atom_lo - grid_lo
     pad_hi = grid_hi - atom_hi
-    pad_all = np.vstack([pad_lo, pad_hi])   # (2,3)
+    pad_all = np.vstack([pad_lo, pad_hi])   # (2,3), kept for diagnostics only
 
-    padding = float(pad_all.mean())
-    if pad_all.max() - pad_all.min() > spacing:
+    padding = float(pad_lo.mean())
+    if pad_lo.max() - pad_lo.min() > spacing:
         print(
-            f"cube_grid_params: WARNING {cubefile}: the six face paddings vary "
-            f"by more than one grid step ({pad_all.min():.3g} to "
-            f"{pad_all.max():.3g} Bohr) -- this cube may not have been built "
-            "with a single uniform padding value; the returned padding "
-            f"({padding:.3g} Bohr, the mean) may not exactly reproduce this grid."
+            f"cube_grid_params: WARNING {cubefile}: the low-side padding varies "
+            f"by more than one grid step across x/y/z ({pad_lo.min():.3g} to "
+            f"{pad_lo.max():.3g} Bohr) -- this cube was likely not built with a "
+            f"single uniform padding value; the returned padding ({padding:.3g} "
+            "Bohr) may not exactly reproduce this grid."
         )
 
     return {
