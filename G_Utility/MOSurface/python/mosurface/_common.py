@@ -413,10 +413,26 @@ def cube_grid_params(cubefile):
         npoints            - (Nx, Ny, Nz)
         origin_bohr        - (3,) ndarray
 
-    Example (matching grid for g16_draw_cube_surface's color_by):
-        p = cube_grid_params('density.cube')
+    CAUTION -- direction matters: ESP is far more expensive to evaluate
+    per grid point than density or an MO (McMurchie-Davidson integrals,
+    or a Coulomb-grid-sum fallback for basis sets with shells the
+    analytic method does not support), and g16_draw_esp_surface's own
+    save_cube path evaluates ESP at every point of the saved grid, not
+    just at isosurface vertices, capped at 2e6 points so it errors out
+    instead of silently running for hours. A grid recovered from a
+    DENSITY cube (typically 0.10-0.15 Bohr spacing, fine enough for a
+    nice-looking isosurface) is very often too fine to reuse for an ESP
+    save_cube this way. Prefer the opposite order: pick a shared
+    grid_spacing/padding the ESP evaluation can afford (e.g. around
+    g16_draw_esp_surface's own defaults, cube_spacing=0.30/
+    cube_padding=4.0) for the ESP cube first, then match the (much
+    cheaper to re-evaluate) density cube to IT:
+
         g16_draw_esp_surface(data, save_cube='esp.cube',
-            cube_spacing=p['grid_spacing'], cube_padding=p['padding'])
+            cube_spacing=0.30, cube_padding=4.0)
+        p = cube_grid_params('esp.cube')
+        g16_draw_density_surface(data, save_cube='density.cube',
+            grid_spacing=p['grid_spacing'], padding=p['padding'])
         g16_draw_cube_surface('density.cube', color_by='esp.cube')
     """
     d = read_cube_file(cubefile)

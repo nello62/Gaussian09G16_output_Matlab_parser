@@ -34,10 +34,26 @@ function params = g_cube_grid_params(cubefile)
 %       Npoints         - [Nx Ny Nz]
 %       Origin_bohr     - [1x3]
 %
-%   Example (matching grid for G_draw_cube_surface's 'ColorBy'):
-%       p = g_cube_grid_params('density.cube');
+%   CAUTION -- direction matters: ESP is far more expensive to evaluate
+%   per grid point than density or an MO (McMurchie-Davidson integrals,
+%   or a Coulomb-grid-sum fallback for basis sets with shells the
+%   analytic method does not support), and G_DRAW_ESP_SURFACE's own
+%   'SaveCube' path evaluates ESP at every point of the saved grid, not
+%   just at isosurface vertices, capped at 2e6 points so it errors out
+%   instead of silently running for hours. A grid recovered from a
+%   DENSITY cube (typically 0.10-0.15 Bohr spacing, fine enough for a
+%   nice-looking isosurface) is very often too fine to reuse for an ESP
+%   'SaveCube' this way. Prefer the opposite order: pick a shared
+%   GridSpacing/Padding the ESP evaluation can afford (e.g. around
+%   G_draw_esp_surface's own defaults, CubeSpacing=0.30/CubePadding=4.0)
+%   for the ESP cube first, then match the (much cheaper to re-evaluate)
+%   density cube to IT:
+%
 %       G_draw_esp_surface(data, 'SaveCube', 'esp.cube', ...
-%           'CubeSpacing', p.GridSpacing, 'CubePadding', p.Padding);
+%           'CubeSpacing', 0.30, 'CubePadding', 4.0);
+%       p = g_cube_grid_params('esp.cube');
+%       G_draw_density_surface(data, 'SaveCube', 'density.cube', ...
+%           'GridSpacing', p.GridSpacing, 'Padding', p.Padding);
 %       G_draw_cube_surface('density.cube', 'ColorBy', 'esp.cube');
 %
 %   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
