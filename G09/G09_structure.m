@@ -2,13 +2,19 @@ function mol = G09_structure(filename, varargin)
 % G09_STRUCTURE  Extracts the molecular geometry from a Gaussian 09 output file.
 %
 %   mol = G09_STRUCTURE(filename)
+%   mol = G09_STRUCTURE(filename, 'orientation', 'standard')
+%   mol = G09_STRUCTURE(filename, 'orientation', 'input')
 %   mol = G09_STRUCTURE(filename, 'step', 'last')
 %   mol = G09_STRUCTURE(filename, 'step', 'first')
 %   mol = G09_STRUCTURE(filename, 'step', N)
 %
-%   Gaussian 09 writes only "Input orientation:" blocks (never Standard
-%   orientation), so the 'orientation' parameter of G16_structure is not
-%   needed here.
+%   Most Gaussian 09 jobs write only "Input orientation:" blocks, but
+%   this is NOT universal -- some jobs (the exact route/keyword
+%   combination is not fully characterised) write only "Standard
+%   orientation:" instead, with no "Input orientation:" block at all.
+%   The default 'orientation','auto' handles both: it uses Standard
+%   orientation if present in the file, falling back to Input
+%   orientation otherwise (same convention as G16_structure).
 %
 %   OUTPUT  struct mol with fields:
 %       .symbols     {Natoms x 1 cell}    atomic symbols
@@ -17,7 +23,7 @@ function mol = G09_structure(filename, varargin)
 %       .Natoms      int
 %       .step        int                  index of extracted step (1-based)
 %       .n_steps     int                  total geometry blocks in file
-%       .orientation char                 always 'Input orientation'
+%       .orientation char                 'Standard orientation' or 'Input orientation'
 %       .filename    char
 %
 %   Optional parameters also include:
@@ -29,6 +35,7 @@ function mol = G09_structure(filename, varargin)
 %   Example:
 %       mol = G09_structure('indaco.log');
 %       mol = G09_structure('indaco.log', 'step', 1);
+%       mol = G09_structure('calc.log', 'orientation', 'input');
 %
 %   Author: Sebastiano Trusso, CNR - Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy
 %   Email: sebastiano.trusso@cnr.it
@@ -39,9 +46,12 @@ function mol = G09_structure(filename, varargin)
 % -------------------------------------------------------------------------
 p = inputParser;
 addRequired(p,  'filename', @ischar);
+addParameter(p, 'orientation', 'auto', @(x) ischar(x) && ...
+    any(strcmpi(x, {'standard','input','auto'})));
 addParameter(p, 'step',     'last', @(x) ischar(x) || isnumeric(x));
 addParameter(p, 'Lines',    {},     @iscell);
 parse(p, filename, varargin{:});
+ori_pref = lower(p.Results.orientation);
 step_req = p.Results.step;
 
 % -------------------------------------------------------------------------
@@ -71,12 +81,35 @@ N = numel(lines);
 Z2sym = Z2symbol_table();
 
 % -------------------------------------------------------------------------
-% Find all "Input orientation:" blocks
+% Find all orientation blocks in the file
 % -------------------------------------------------------------------------
-block_starts = find(~cellfun(@isempty, strfind(lines, 'Input orientation:')));
+% Orientation priority
+if strcmp(ori_pref, 'auto')
+    % use Standard if present, otherwise Input
+    has_std = any(~cellfun(@isempty, regexpi(lines, 'Standard orientation\s*:')));
+    if has_std
+        ori_label = 'Standard orientation';
+    else
+        ori_label = 'Input orientation';
+    end
+elseif strcmp(ori_pref, 'standard')
+    ori_label = 'Standard orientation';
+else
+    ori_label = 'Input orientation';
+end
+
+block_starts = find(~cellfun(@isempty, regexpi(lines, [ori_label, '\s*:'])));
 
 if isempty(block_starts)
-    error('G09_structure: no "Input orientation:" block found in %s', filename);
+    % Fallback: if Standard was requested but not found, try Input
+    if strcmp(ori_pref, 'standard')
+        warning('G09_structure: Standard orientation not found, falling back to Input orientation.');
+        ori_label    = 'Input orientation';
+        block_starts = find(~cellfun(@isempty, regexpi(lines, [ori_label, '\s*:'])));
+    end
+    if isempty(block_starts)
+        error('G09_structure: no "%s" block found in %s', ori_label, filename);
+    end
 end
 
 n_blocks = numel(block_starts);
@@ -137,7 +170,7 @@ mol.Z           = Zvec;
 mol.Natoms      = size(XYZ, 1);
 mol.step        = step_idx;
 mol.n_steps     = n_blocks;
-mol.orientation = 'Input orientation';
+mol.orientation = ori_label;
 mol.filename    = filename;
 
 end  % G09_structure
