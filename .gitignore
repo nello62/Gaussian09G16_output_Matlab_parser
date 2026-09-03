@@ -10,13 +10,14 @@
 !/.gitignore
 !/README.md
 
-# G_Utility/: only these three tools are part of the tracked toolbox;
+# G_Utility/: only these four tools are part of the tracked toolbox;
 # everything else in G_Utility/ (ConvFile, JobCheck, ModeMatch, the
 # manual, scratch/test files) stays private/untracked.
 /G_Utility/*
 !/G_Utility/au2SI/
 !/G_Utility/MOSurface/
 !/G_Utility/RamanBrowser/
+!/G_Utility/GaussianViewer/
 
 # Python cache/build junk, even inside the tracked folder
 **/__pycache__/
