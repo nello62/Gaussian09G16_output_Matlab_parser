@@ -196,7 +196,10 @@ singleBondsCheck = uicheckbox(tabDisplay, 'Position', [5 452 sidebarW-30 22], ..
     'Text', 'Single bonds only', 'Value', false);
 uilabel(tabDisplay, 'Position', [5 420 150 18], 'Text', 'Bond tolerance:');
 bondTolField = uieditfield(tabDisplay, 'numeric', 'Position', [160 418 sidebarW-190 22], 'Value', 1.30);
-uibutton(tabDisplay, 'push', 'Position', [5 380 sidebarW-30 30], ...
+uilabel(tabDisplay, 'Position', [5 388 150 18], 'Text', 'Label font size:');
+labelFontSizeField = uieditfield(tabDisplay, 'numeric', 'Position', [160 386 sidebarW-190 22], ...
+    'Value', 10, 'Limits', [1 Inf], 'RoundFractionalValues', 'on');
+uibutton(tabDisplay, 'push', 'Position', [5 346 sidebarW-30 30], ...
     'Text', 'Redraw molecule', 'ButtonPushedFcn', @(s,e) onRedrawMolecule());
 
 % -------------------------------------------------------------------------
@@ -226,6 +229,32 @@ end
     end
 
 % -------------------------------------------------------------------------
+    function applyLabelFontSize()
+    % G09/G16_draw_molecule (and, through it, draw_mode) hardcode the
+    % atom-index label FontSize to 7, with no parameter to change it --
+    % same limitation G16_modeViewer already works around, with the same
+    % fix reused here: find the label Text objects on AX after a render
+    % and set their FontSize directly, excluding the axes' own
+    % Title/XLabel/YLabel/ZLabel (also Type=='text', but not atom
+    % labels). No-op if 'Show atom labels' produced no label objects.
+        txObjs = findall(ax, 'Type', 'Text');
+        if isempty(txObjs)
+            return
+        end
+        nonLabel = gobjects(0);
+        for propName = ["Title","XLabel","YLabel","ZLabel"]
+            h = ax.(propName);
+            if isgraphics(h)
+                nonLabel(end+1) = h; %#ok<AGROW>
+            end
+        end
+        atomLabelObjs = txObjs(~ismember(txObjs, nonLabel));
+        if ~isempty(atomLabelObjs)
+            set(atomLabelObjs, 'FontSize', labelFontSizeField.Value);
+        end
+    end
+
+% -------------------------------------------------------------------------
     function [f, p] = pickOpenFile(filterSpec, dlgTitle)
     % Wraps UIGETFILE: on macOS, a uifigure's CEF-based window can end up
     % in front of the native file-picker dialog it just triggered, and
@@ -237,30 +266,40 @@ end
     % restored to 'normal' immediately after, whether a file was picked
     % or the dialog was cancelled.
         prevState = fig.WindowState;
+        if strcmp(prevState, 'minimized')
+            prevState = 'normal';   % never restore back into a minimized state
+        end
         fig.WindowState = 'minimized';
         drawnow;
         try
             [f, p] = uigetfile(filterSpec, dlgTitle);
         catch ME
             fig.WindowState = prevState;
+            drawnow;
             rethrow(ME);
         end
         fig.WindowState = prevState;
+        drawnow;
     end
 
 % -------------------------------------------------------------------------
     function [f, p] = pickSaveFile(filterSpec, dlgTitle, defaultName)
     % Same rationale as PICKOPENFILE, for UIPUTFILE.
         prevState = fig.WindowState;
+        if strcmp(prevState, 'minimized')
+            prevState = 'normal';   % never restore back into a minimized state
+        end
         fig.WindowState = 'minimized';
         drawnow;
         try
             [f, p] = uiputfile(filterSpec, dlgTitle, defaultName);
         catch ME
             fig.WindowState = prevState;
+            drawnow;
             rethrow(ME);
         end
         fig.WindowState = prevState;
+        drawnow;
     end
 
 % -------------------------------------------------------------------------
@@ -423,6 +462,7 @@ end
             drawMoleculeFcn(mol, 'Ax', ax, 'ShowLabels', showLabelsCheck.Value, ...
                 'SingleBondsOnly', singleBondsCheck.Value, 'BondTol', bondTolField.Value, ...
                 'Title', '');
+            applyLabelFontSize();
             [~, fname_] = fileparts(currentFilename);
             statusLabel.Text = sprintf('Molecule: %s', fname_);
         catch ME
@@ -447,6 +487,7 @@ end
         try
             drawModeFcn(mol, nm, idx, 'Ax', ax, 'ShowLabels', showLabelsCheck.Value, ...
                 'BondTol', bondTolField.Value);
+            applyLabelFontSize();
             statusLabel.Text = sprintf('Mode %d -- %.1f cm^{-1}', idx, nm.freq(idx));
         catch ME
             uialert(fig, ME.message, 'draw_mode error');
@@ -530,7 +571,9 @@ end
         try
             G_draw_mo_surface(fchkData, resolveMoField(), 'Ax', ax, ...
                 'IsoValue', isoValField.Value, 'GridSpacing', gridSpField.Value, ...
-                'Padding', paddingField.Value, 'ShowMolecule', showMolCheck.Value);
+                'Padding', paddingField.Value, 'ShowMolecule', showMolCheck.Value, ...
+                'ShowLabels', showLabelsCheck.Value);
+            applyLabelFontSize();
             statusLabel.Text = sprintf('MO surface: %s', moIdxField.Value);
         catch ME
             uialert(fig, ME.message, 'G_draw_mo_surface error');
@@ -549,7 +592,8 @@ end
         try
             G_draw_density_surface(fchkData, 'Ax', ax, 'GridSpacing', gridSpField.Value, ...
                 'Padding', paddingField.Value, 'ShowMolecule', showMolCheck.Value, ...
-                'SpinDensity', spinDensityCheck.Value);
+                'SpinDensity', spinDensityCheck.Value, 'ShowLabels', showLabelsCheck.Value);
+            applyLabelFontSize();
             if spinDensityCheck.Value
                 statusLabel.Text = 'Spin density surface';
             else
@@ -582,7 +626,9 @@ end
             'Indeterminate', 'on');
         try
             G_draw_esp_surface(fchkData, 'Ax', ax, 'GridSpacing', gridSpField.Value, ...
-                'Padding', paddingField.Value, 'ShowMolecule', showMolCheck.Value);
+                'Padding', paddingField.Value, 'ShowMolecule', showMolCheck.Value, ...
+                'ShowLabels', showLabelsCheck.Value);
+            applyLabelFontSize();
             statusLabel.Text = 'ESP surface';
         catch ME
             uialert(fig, ME.message, 'G_draw_esp_surface error');
