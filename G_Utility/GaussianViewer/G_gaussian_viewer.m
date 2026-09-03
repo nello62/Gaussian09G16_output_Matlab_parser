@@ -226,6 +226,44 @@ end
     end
 
 % -------------------------------------------------------------------------
+    function [f, p] = pickOpenFile(filterSpec, dlgTitle)
+    % Wraps UIGETFILE: on macOS, a uifigure's CEF-based window can end up
+    % in front of the native file-picker dialog it just triggered, and
+    % since the uifigure is blocked waiting for the (invisible, behind
+    % it) dialog, there is then no way to move it out of the way either --
+    % the whole app appears stuck. Minimising the main window for the
+    % duration of the dialog removes it from the screen entirely, so it
+    % can never end up in front of (or block access to) the dialog; it is
+    % restored to 'normal' immediately after, whether a file was picked
+    % or the dialog was cancelled.
+        prevState = fig.WindowState;
+        fig.WindowState = 'minimized';
+        drawnow;
+        try
+            [f, p] = uigetfile(filterSpec, dlgTitle);
+        catch ME
+            fig.WindowState = prevState;
+            rethrow(ME);
+        end
+        fig.WindowState = prevState;
+    end
+
+% -------------------------------------------------------------------------
+    function [f, p] = pickSaveFile(filterSpec, dlgTitle, defaultName)
+    % Same rationale as PICKOPENFILE, for UIPUTFILE.
+        prevState = fig.WindowState;
+        fig.WindowState = 'minimized';
+        drawnow;
+        try
+            [f, p] = uiputfile(filterSpec, dlgTitle, defaultName);
+        catch ME
+            fig.WindowState = prevState;
+            rethrow(ME);
+        end
+        fig.WindowState = prevState;
+    end
+
+% -------------------------------------------------------------------------
     function loadFile(fn)
     % Reads structure/modes/energy/charge/orbital-energy data from FN,
     % dispatching to G09_* or G16_* functions per the detected Gaussian
@@ -318,9 +356,9 @@ end
 
 % -------------------------------------------------------------------------
     function onOpenFile()
-        [f, p] = uigetfile({'*.out;*.log', 'Gaussian output (*.out, *.log)'; ...
-                             '*.fchk', 'Formatted checkpoint (*.fchk)'}, ...
-                             'Open Gaussian file');
+        [f, p] = pickOpenFile({'*.out;*.log', 'Gaussian output (*.out, *.log)'; ...
+                                '*.fchk', 'Formatted checkpoint (*.fchk)'}, ...
+                                'Open Gaussian file');
         if isequal(f, 0)
             return
         end
@@ -423,7 +461,7 @@ end
         end
         [~, base_] = fileparts(currentFilename);
         defaultName = sprintf('%s_mode%d.mp4', matlab.lang.makeValidName(base_), selectedModeIdx);
-        [f, p] = uiputfile({'*.mp4', 'MP4 video'}, 'Save mode animation as', defaultName);
+        [f, p] = pickSaveFile({'*.mp4', 'MP4 video'}, 'Save mode animation as', defaultName);
         if isequal(f, 0)
             return
         end
@@ -459,7 +497,7 @@ end
 
 % -------------------------------------------------------------------------
     function onBrowseFchk()
-        [f, p] = uigetfile({'*.fchk', 'Formatted checkpoint (*.fchk)'}, 'Select .fchk file');
+        [f, p] = pickOpenFile({'*.fchk', 'Formatted checkpoint (*.fchk)'}, 'Select .fchk file');
         if isequal(f, 0)
             return
         end
@@ -560,9 +598,9 @@ end
         end
         [~, base_] = fileparts(currentFilename);
         defaultName = [matlab.lang.makeValidName(base_), '.pdf'];
-        [f, p] = uiputfile({'*.pdf', 'PDF (vector)'; '*.eps', 'EPS (vector)'; ...
-                             '*.png', 'PNG (raster)'; '*.jpg', 'JPEG (raster)'}, ...
-                             'Save current view as', defaultName);
+        [f, p] = pickSaveFile({'*.pdf', 'PDF (vector)'; '*.eps', 'EPS (vector)'; ...
+                                '*.png', 'PNG (raster)'; '*.jpg', 'JPEG (raster)'}, ...
+                                'Save current view as', defaultName);
         if isequal(f, 0)
             return
         end
