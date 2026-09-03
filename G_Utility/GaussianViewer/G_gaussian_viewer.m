@@ -208,6 +208,24 @@ end
 %  Nested callback/helper functions (share the outer function's workspace)
 % =========================================================================
 
+    function clearAx()
+    % Removes every plotted object from the shared AX before a new
+    % render. CLA(ax) alone does NOT fully clear a uiaxes -- unlike an
+    % ordinary axes, some of its children (observed: most CPK spheres,
+    % all bond lines) survive a plain CLA call, so switching between
+    % molecule/mode/MOSurface renders (or between two different modes)
+    % left old geometry visibly accumulating underneath the new render.
+    % FINDALL(ax) recurses into every descendant regardless of nesting
+    % depth (unlike ax.Children, which only lists DIRECT children and
+    % was found to miss the same objects CLA does); AX itself is
+    % filtered out of the result before deleting, since FINDALL(ax)
+    % also returns ax.
+        kids = findall(ax);
+        kids(kids == ax) = [];
+        delete(kids);
+    end
+
+% -------------------------------------------------------------------------
     function loadFile(fn)
     % Reads structure/modes/energy/charge/orbital-energy data from FN,
     % dispatching to G09_* or G16_* functions per the detected Gaussian
@@ -362,7 +380,7 @@ end
         if isempty(mol)
             return
         end
-        cla(ax);
+        clearAx();
         try
             drawMoleculeFcn(mol, 'Ax', ax, 'ShowLabels', showLabelsCheck.Value, ...
                 'SingleBondsOnly', singleBondsCheck.Value, 'BondTol', bondTolField.Value, ...
@@ -387,7 +405,7 @@ end
         row = evt.Indices(1,1);
         idx = modesTable.Data{row,1};
         selectedModeIdx = idx;
-        cla(ax);
+        clearAx();
         try
             drawModeFcn(mol, nm, idx, 'Ax', ax, 'ShowLabels', showLabelsCheck.Value, ...
                 'BondTol', bondTolField.Value);
@@ -469,7 +487,7 @@ end
             uialert(fig, 'Load a .fchk file first (MOSurface tab).', 'No .fchk loaded');
             return
         end
-        cla(ax);
+        clearAx();
         d = uiprogressdlg(fig, 'Title', 'Rendering molecular orbital...', 'Indeterminate', 'on');
         try
             G_draw_mo_surface(fchkData, resolveMoField(), 'Ax', ax, ...
@@ -488,7 +506,7 @@ end
             uialert(fig, 'Load a .fchk file first (MOSurface tab).', 'No .fchk loaded');
             return
         end
-        cla(ax);
+        clearAx();
         d = uiprogressdlg(fig, 'Title', 'Rendering electron density...', 'Indeterminate', 'on');
         try
             G_draw_density_surface(fchkData, 'Ax', ax, 'GridSpacing', gridSpField.Value, ...
@@ -520,7 +538,7 @@ end
         if ~strcmp(sel, 'Run')
             return
         end
-        cla(ax);
+        clearAx();
         d = uiprogressdlg(fig, 'Title', 'Rendering ESP surface...', ...
             'Message', 'This may take a while -- see the command window for progress.', ...
             'Indeterminate', 'on');
