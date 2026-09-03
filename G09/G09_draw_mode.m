@@ -21,6 +21,13 @@ function G09_draw_mode(mol, nm, mode_idx, varargin)
 %                       physically identical). If the arrows point opposite
 %                       to GaussView's rendering for this mode, set this
 %                       to true to flip them.
+%       'Ax'          - existing axes handle (default: [] = new figure).
+%                       Accepts a uiaxes just as well as an ordinary axes
+%                       (same convention as G09_DRAW_MOLECULE/
+%                       G09_DRAW_ORBITAL). The caller is responsible for
+%                       clearing the axes (e.g. CLA) before this call if
+%                       reusing it across multiple renders -- this
+%                       function only draws, it never clears.
 %
 %   Example:
 %       mol = G09_structure('V_E00t.out');
@@ -43,6 +50,7 @@ addParameter(p, 'AtomScale',  0.35,           @isnumeric);
 addParameter(p, 'BondTol',    1.30,           @isnumeric);
 addParameter(p, 'ShowLabels', false,          @islogical);
 addParameter(p, 'FlipSign',   false,          @islogical);
+addParameter(p, 'Ax',         [],             @ishandle);
 parse(p, mol, nm, mode_idx, varargin{:});
 
 scale       = p.Results.Scale;
@@ -51,6 +59,7 @@ atom_scale  = p.Results.AtomScale;
 bond_tol    = p.Results.BondTol;
 show_labels = p.Results.ShowLabels;
 flip_sign   = p.Results.FlipSign;
+ax          = p.Results.Ax;
 
 % Validation
 if mode_idx < 1 || mode_idx > nm.Nmodes
@@ -69,10 +78,12 @@ if nm.has_Raman
         freq_str, nm.IR(mode_idx), nm.Raman(mode_idx));
 end
 
-fig = figure('Color', 'white', 'Name', ...
-    sprintf('Mode %d — %.1f cm-1', mode_idx, nm.freq(mode_idx)), ...
-    'NumberTitle', 'off');
-ax = axes('Parent', fig);
+if isempty(ax)
+    fig = figure('Color', 'white', 'Name', ...
+        sprintf('Mode %d — %.1f cm-1', mode_idx, nm.freq(mode_idx)), ...
+        'NumberTitle', 'off');
+    ax = axes('Parent', fig);
+end
 
 G09_draw_molecule(mol, 'Ax', ax, 'AtomScale', atom_scale, ...
     'BondTol', bond_tol, 'ShowLabels', show_labels, ...
