@@ -69,6 +69,7 @@ verLabel        = '';
 mol = [];  nm = [];  en = [];  oe = [];
 chg = NaN; mult = NaN;
 selectedModeIdx = [];
+cachedModesDisplayData = {};
 
 structureFcn    = [];
 nmodesFcn       = [];
@@ -152,7 +153,8 @@ tabDisplay = uitab(tg, 'Title', 'Display');
 modesTable = uitable(tabModes, 'Position', [5 45 sidebarW-30 470], ...
     'ColumnName', {'Mode','Freq (cm^-1)','Sym','IR','Raman'}, ...
     'ColumnEditable', false(1,5), 'ColumnSortable', true, ...
-    'CellSelectionCallback', @(s,e) onModeSelected(e));
+    'CellSelectionCallback', @(s,e) onModeSelected(e), ...
+    'DisplayDataChangedFcn', @(s,e) onModesDisplayDataChanged());
 uibutton(tabModes, 'push', 'Position', [5 8 sidebarW-30 32], ...
     'Text', 'Animate mode (MP4)...', 'ButtonPushedFcn', @(s,e) onAnimate());
 
@@ -435,6 +437,7 @@ end
     function updateModesTable()
         if isempty(nm) || nm.Nmodes < 1
             modesTable.Data = {};
+            cachedModesDisplayData = {};
             return
         end
         data = cell(nm.Nmodes, 5);
@@ -454,6 +457,22 @@ end
             end
         end
         modesTable.Data = data;
+        % DisplayDataChangedFcn should fire from the line above and cache
+        % this same unsorted order, but set it here too as a guaranteed
+        % baseline in case a selection happens before that callback runs.
+        cachedModesDisplayData = data;
+    end
+
+% -------------------------------------------------------------------------
+    function onModesDisplayDataChanged()
+        % Mirrors the pattern MathWorks documents for reacting to sorted
+        % uitable data: cache DisplayData here, on the dedicated
+        % DisplayDataChangedFcn callback, rather than re-reading
+        % modesTable.DisplayData live inside CellSelectionCallback -- the
+        % latter was found to be unreliable in practice (reported bug:
+        % clicking the top row after sorting by Raman intensity rendered
+        % an unrelated mode instead of the one actually displayed).
+        cachedModesDisplayData = modesTable.DisplayData;
     end
 
 % -------------------------------------------------------------------------
@@ -485,15 +504,16 @@ end
             return
         end
         row = evt.Indices(1,1);
-        % DisplayData (not Data) reflects the table's CURRENT sorted view:
         % ColumnSortable lets the user click a column header (Mode/Freq/
-        % Sym/IR/Raman) to sort the rows, but that only reorders what is
-        % shown, not the underlying Data array -- Indices from this
-        % callback refers to the row's position in the sorted display, so
-        % reading Data{row,1} after a sort would silently pick the wrong
-        % mode. DisplayData is kept in sync with the display for exactly
-        % this reason.
-        idx = modesTable.DisplayData{row,1};
+        % Sym/IR/Raman) to sort the rows without reordering the underlying
+        % Data array -- Indices from this callback refers to the row's
+        % position in the sorted display, so reading Data{row,1} after a
+        % sort would silently pick the wrong mode. Reading a live
+        % modesTable.DisplayData{row,1} here instead of a cached copy was
+        % tried first and found unreliable (clicking the top row after
+        % sorting by Raman intensity rendered an unrelated mode), so the
+        % cache kept in sync by onModesDisplayDataChanged is used instead.
+        idx = cachedModesDisplayData{row,1};
         selectedModeIdx = idx;
         clearAx();
         try
