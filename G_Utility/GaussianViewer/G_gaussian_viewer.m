@@ -151,7 +151,7 @@ tabDisplay = uitab(tg, 'Title', 'Display');
 % ---- Modes tab ----------------------------------------------------------
 modesTable = uitable(tabModes, 'Position', [5 45 sidebarW-30 470], ...
     'ColumnName', {'Mode','Freq (cm^-1)','Sym','IR','Raman'}, ...
-    'ColumnEditable', false(1,5), ...
+    'ColumnEditable', false(1,5), 'ColumnSortable', true, ...
     'CellSelectionCallback', @(s,e) onModeSelected(e));
 uibutton(tabModes, 'push', 'Position', [5 8 sidebarW-30 32], ...
     'Text', 'Animate mode (MP4)...', 'ButtonPushedFcn', @(s,e) onAnimate());
@@ -485,7 +485,15 @@ end
             return
         end
         row = evt.Indices(1,1);
-        idx = modesTable.Data{row,1};
+        % DisplayData (not Data) reflects the table's CURRENT sorted view:
+        % ColumnSortable lets the user click a column header (Mode/Freq/
+        % Sym/IR/Raman) to sort the rows, but that only reorders what is
+        % shown, not the underlying Data array -- Indices from this
+        % callback refers to the row's position in the sorted display, so
+        % reading Data{row,1} after a sort would silently pick the wrong
+        % mode. DisplayData is kept in sync with the display for exactly
+        % this reason.
+        idx = modesTable.DisplayData{row,1};
         selectedModeIdx = idx;
         clearAx();
         try
