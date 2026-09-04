@@ -36,5 +36,8 @@
 # Test/scratch data artifacts, not toolbox source.
 /G_Utility/MOSurface/CH3_spin.cube
 
+# mcc build output (run build_standalone.sh to regenerate), not source.
+/G_Utility/GaussianViewer/build/
+
 # Claude Code local tool settings (machine-specific, not project content)
 **/.claude/
