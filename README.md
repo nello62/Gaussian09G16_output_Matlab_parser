@@ -167,7 +167,7 @@ If you use this toolbox in published work, please cite:
 
 > S. Trusso, "G09/G16 Toolbox: MATLAB and Python libraries for parsing,
 > analysing and visualising Gaussian 09/16 output files", *SoftwareX* **35**
-> (2026) 103009.
+> (2026) 103009. [doi:10.1016/j.softx.2026.103009](https://doi.org/10.1016/j.softx.2026.103009)
 
 ```bibtex
 @article{Trusso2026SoftwareX,
@@ -176,7 +176,8 @@ If you use this toolbox in published work, please cite:
   journal = {SoftwareX},
   volume  = {35},
   pages   = {103009},
-  year    = {2026}
+  year    = {2026},
+  doi     = {10.1016/j.softx.2026.103009}
 }
 ```
 
