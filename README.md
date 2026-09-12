@@ -161,6 +161,25 @@ See [`G16parser/README.md`](G16parser/README.md) for the full function
 reference and [`G16parser/example.py`](G16parser/example.py) for a runnable
 end-to-end example.
 
+## Citation
+
+If you use this toolbox in published work, please cite:
+
+> S. Trusso, "G09/G16 Toolbox: MATLAB and Python libraries for parsing,
+> analysing and visualising Gaussian 09/16 output files", *SoftwareX* **35**
+> (2026) 103009.
+
+```bibtex
+@article{Trusso2026SoftwareX,
+  author  = {Trusso, S.},
+  title   = {G09/G16 Toolbox: MATLAB and Python libraries for parsing, analysing and visualising Gaussian 09/16 output files},
+  journal = {SoftwareX},
+  volume  = {35},
+  pages   = {103009},
+  year    = {2026}
+}
+```
+
 ## Scope and disclaimer
 
 This toolbox is a research and productivity aid for parsing, analysing,
