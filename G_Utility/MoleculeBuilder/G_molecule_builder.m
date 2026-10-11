@@ -29,11 +29,17 @@ function G_molecule_builder()
 %       A1_y=A1_z=A2_y=A2_z=0). Useful to orient a molecule along a
 %       bond/axis of interest (e.g. before reading off a dipole component
 %       by eye, or just for a cleaner view) -- purely a rigid motion,
-%       bond lengths/angles are unaffected. "Show X/Y/Z axes (dashed)"
-%       (auto-checked the first time an alignment is done, but toggleable
-%       any time) overlays dashed +/-X/Y/Z reference lines through the
-%       origin, colored red/green/blue and labelled, so the alignment is
-%       visually obvious in the 3D view.
+%       bond lengths/angles are unaffected.
+%     - "Align A1-A2-A3 to plane"   -> select exactly three rows in the
+%       Atoms table (A1/A2/A3 = ascending row index, same convention) and
+%       rigidly rotate+translate the molecule so all three end up lying
+%       exactly in the chosen coordinate plane (XY/XZ/YZ) -- e.g.
+%       choosing XY makes A1_z=A2_z=A3_z=0. Errors out (via UIALERT) if
+%       the three are collinear/coincident (no unique plane).
+%       "Show X/Y/Z axes (dashed)" (auto-checked the first time either
+%       alignment is done, but toggleable any time) overlays dashed
+%       +/-X/Y/Z reference lines through the origin, colored red/green/blue
+%       and labelled, so the alignment is visually obvious in the 3D view.
 %     - Atoms/Bonds tables          -> direct numeric/symbol/bond-order
 %       editing, and row selection (selects the corresponding atom)
 %     - Click an atom directly in the 3D view -> selects it (same as
@@ -213,25 +219,31 @@ alignAxisDD = uidropdown(tabBuild, 'Position', [48 253 55 24], ...
 alignBtn = uibutton(tabBuild, 'push', 'Position', [108 253 sidebarW-143 24], ...
     'Text', 'Align A1->A2 to axis', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToAxis());
 
-showAxesCheck = uicheckbox(tabBuild, 'Position', [5 223 sidebarW-40 22], ...
+uilabel(tabBuild, 'Position', [5 224 40 18], 'Text', 'Plane:');
+alignPlaneDD = uidropdown(tabBuild, 'Position', [48 221 55 24], ...
+    'Items', {'XY','XZ','YZ'}, 'Value', 'XY');
+alignPlaneBtn = uibutton(tabBuild, 'push', 'Position', [108 221 sidebarW-143 24], ...
+    'Text', 'Align A1-A2-A3 to plane', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToPlane());
+
+showAxesCheck = uicheckbox(tabBuild, 'Position', [5 191 sidebarW-40 22], ...
     'Text', 'Show X/Y/Z axes (dashed)', 'Value', false, 'ValueChangedFcn', @(s,e) redraw());
 
-uilabel(tabBuild, 'Position', [5 197 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
-bondsTable = uitable(tabBuild, 'Position', [5 112 sidebarW-40 80], ...
+uilabel(tabBuild, 'Position', [5 165 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
+bondsTable = uitable(tabBuild, 'Position', [5 110 sidebarW-40 50], ...
     'ColumnName', {'Atom1','Atom2','Order'}, ...
     'ColumnEditable', [false false true], ...
     'CellEditCallback', @(s,e) onBondsTableEdit(e), ...
     'CellSelectionCallback', @(s,e) onBondsTableSelection(e));
 
-optMethodDD = uidropdown(tabBuild, 'Position', [5 82 sidebarW-40 22], ...
+optMethodDD = uidropdown(tabBuild, 'Position', [5 80 sidebarW-40 22], ...
     'Items', {'Quick cleanup (built-in)', 'Open Babel: MMFF94', 'Open Babel: MMFF94s', 'Open Babel: UFF'}, ...
     'Value', 'Quick cleanup (built-in)');
-uibutton(tabBuild, 'push', 'Position', [5 49 sidebarW-40 28], ...
+uibutton(tabBuild, 'push', 'Position', [5 47 sidebarW-40 28], ...
     'Text', 'Optimize structure', 'ButtonPushedFcn', @(s,e) onOptimizeStructure());
 
-undoBtn = uibutton(tabBuild, 'push', 'Position', [5 11 160 30], ...
+undoBtn = uibutton(tabBuild, 'push', 'Position', [5 9 160 30], ...
     'Text', 'Undo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onUndo());
-redoBtn = uibutton(tabBuild, 'push', 'Position', [170 11 160 30], ...
+redoBtn = uibutton(tabBuild, 'push', 'Position', [170 9 160 30], ...
     'Text', 'Redo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRedo());
 
 % ---- "Gaussian Job" tab ---------------------------------------------------
@@ -543,6 +555,7 @@ updateBondsTable();
         removeAtomBtn.Enable   = matlab.lang.OnOffSwitchState(selAtomIdx >= 1);
         bondPairBtn.Enable     = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
         alignBtn.Enable        = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
+        alignPlaneBtn.Enable   = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 3);
         removeBondBtn.Enable   = matlab.lang.OnOffSwitchState(~isempty(lastBondsSelection));
     end
 
@@ -860,6 +873,50 @@ updateBondsTable();
         redraw();
         snapshotPush();
         statusLabel.Text = sprintf('Aligned atoms %d->%d onto the %s axis.', a, b, alignAxisDD.Value);
+    end
+
+% -------------------------------------------------------------------------
+    function onAlignToPlane()
+    % A1/A2/A3 = lastAtomsSelection, sorted ascending (same row-index
+    % convention as ONALIGNTOAXIS/ONBONDPAIR). The plane through the three
+    % selected atoms has normal CROSS(P2-P1, P3-P1); rotating that normal
+    % onto the chosen coordinate plane's own normal (Z for XY, Y for XZ,
+    % X for YZ) makes the atoms' plane parallel to the target one, then a
+    % single-coordinate translation (analogous to ONALIGNTOAXIS's two-
+    % coordinate one) zeroes that one coordinate for A1 -- A2 and A3 land
+    % exactly on it too "for free", since all three remain coplanar
+    % throughout and that plane is now exactly the target coordinate
+    % plane.
+        if numel(lastAtomsSelection) ~= 3
+            return
+        end
+        a = lastAtomsSelection(1);
+        b = lastAtomsSelection(2);
+        c = lastAtomsSelection(3);
+        p1 = xyz(a,:); p2 = xyz(b,:); p3 = xyz(c,:);
+        normalVec = cross(p2 - p1, p3 - p1);
+        nLen = norm(normalVec);
+        if nLen < 1e-9
+            uialert(fig, ['The three selected atoms are collinear (or coincide); ', ...
+                'they do not define a unique plane.'], 'Cannot align');
+            return
+        end
+        switch alignPlaneDD.Value
+            case 'XY', targetAxis = [0 0 1]; offComp = 3;
+            case 'XZ', targetAxis = [0 1 0]; offComp = 2;
+            otherwise, targetAxis = [1 0 0]; offComp = 1; % 'YZ'
+        end
+        R = rotationAligningVectors(normalVec / nLen, targetAxis);
+        pivot = xyz(a,:);
+        xyzRot = (xyz - pivot) * R' + pivot;
+        shift = zeros(1, 3);
+        shift(offComp) = -xyzRot(a, offComp);
+        xyz = xyzRot + shift;
+        showAxesCheck.Value = true;
+        updateAtomsTable();
+        redraw();
+        snapshotPush();
+        statusLabel.Text = sprintf('Aligned atoms %d,%d,%d onto the %s plane.', a, b, c, alignPlaneDD.Value);
     end
 
 % -------------------------------------------------------------------------
