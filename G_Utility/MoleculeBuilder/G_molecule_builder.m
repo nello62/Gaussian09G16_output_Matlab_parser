@@ -886,7 +886,15 @@ updateBondsTable();
     % coordinate one) zeroes that one coordinate for A1 -- A2 and A3 land
     % exactly on it too "for free", since all three remain coplanar
     % throughout and that plane is now exactly the target coordinate
-    % plane.
+    % plane. Only ever a rigid rotation+translation of the WHOLE molecule
+    % (no projection, no change to any bond length/angle): if the
+    % molecule (or some larger subset of it) was already coplanar with
+    % A1/A2/A3 before this -- e.g. a deliberately built planar fragment --
+    % every atom in that coplanar subset also lands exactly on the target
+    % plane, not just A1/A2/A3 themselves. An atom that was NOT already
+    % coplanar with A1/A2/A3 is carried along rigidly and generally will
+    % not end up on the plane -- picking A1/A2/A3 so that the atoms you
+    % actually want flattened are coplanar with them is up to the user.
         if numel(lastAtomsSelection) ~= 3
             return
         end
