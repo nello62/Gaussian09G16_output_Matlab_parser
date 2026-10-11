@@ -52,8 +52,10 @@ function G_molecule_builder()
 %       code for a DRY-only benefit; a natural, low-risk follow-up)
 %     - G_WRITE_GJF for the actual .gjf export (factored out of
 %       G16_RESTART's own inline writing block, same rationale)
-%     - G_READ_INPUT + G16_GET_BOND_LENGTH for the optional "Load .gjf..."
-%       import (starting bonds are geometrically auto-detected from the
+%     - G_READ_INPUT + G16_GET_BOND_LENGTH for the optional "Load input..."
+%       import (.gjf/.com/.in -- same free-form Gaussian input text format
+%       regardless of extension, so no extension-specific parsing is
+%       needed). Starting bonds are geometrically auto-detected from the
 %       loaded geometry, same heuristic G16_GET_BOND_LENGTH already uses
 %       elsewhere -- editable afterward via the Bonds table, same as any
 %       other bond here)
@@ -155,7 +157,7 @@ uilabel(sidebar, 'Position', [10 790 sidebarW-20 24], ...
 uibutton(sidebar, 'push', 'Position', [10 758 175 28], ...
     'Text', 'New molecule', 'ButtonPushedFcn', @(s,e) onNewMolecule());
 uibutton(sidebar, 'push', 'Position', [195 758 175 28], ...
-    'Text', 'Load .gjf...', 'ButtonPushedFcn', @(s,e) onLoadGjf());
+    'Text', 'Load input...', 'ButtonPushedFcn', @(s,e) onLoadGjf());
 
 uilabel(sidebar, 'Position', [10 728 100 18], 'Text', 'Element:', 'FontWeight', 'bold');
 elementDD = uidropdown(sidebar, 'Position', [10 704 sidebarW-30 24], ...
