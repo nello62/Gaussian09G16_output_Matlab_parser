@@ -23,13 +23,13 @@ function G_molecule_builder()
 %     - "Align A1->A2 to axis"      -> select exactly two rows in the
 %       Atoms table (A1 = lower row index, A2 = higher one, since a
 %       UITABLE's multi-selection is reported sorted, not in click order)
-%       and rotate the whole molecule rigidly about A1 so the A1->A2
-%       direction lines up with the chosen axis (X/Y/Z); A1 itself does
-%       not move. Useful to orient a molecule along a bond/axis of
-%       interest (e.g. before reading off a dipole component by eye, or
-%       just for a cleaner view) -- purely a rotation, bond lengths/angles
-%       are unaffected (ROTATIONALIGNINGVECTORS applies a single rigid
-%       rotation to every atom).
+%       and rigidly rotate+translate the whole molecule so both A1 and A2
+%       end up lying exactly ON the chosen axis (X/Y/Z) -- i.e. their two
+%       off-axis coordinates both become exactly 0 (e.g. choosing X makes
+%       A1_y=A1_z=A2_y=A2_z=0). Useful to orient a molecule along a
+%       bond/axis of interest (e.g. before reading off a dipole component
+%       by eye, or just for a cleaner view) -- purely a rigid motion,
+%       bond lengths/angles are unaffected.
 %     - Atoms/Bonds tables          -> direct numeric/symbol/bond-order
 %       editing, and row selection (selects the corresponding atom)
 %     - Click an atom directly in the 3D view -> selects it (same as
@@ -799,9 +799,18 @@ updateBondsTable();
     % A1 = lastAtomsSelection(1) (lower row index -- UITABLE multi-selection
     % is always reported sorted, so "A1"/"A2" here is an index convention,
     % not click order; same convention ONBONDPAIR already uses). Rotates
-    % every atom rigidly about A1 (A1 itself stays put) so the A1->A2
-    % direction becomes the chosen +X/+Y/+Z axis. A pure rotation never
-    % changes any bond length or angle.
+    % every atom rigidly about A1 so the A1->A2 direction becomes the
+    % chosen +X/+Y/+Z axis, then translates the whole molecule so A1's two
+    % off-axis coordinates become exactly 0 (e.g. for the X axis,
+    % A1_y = A1_z = 0) -- A1 then lies exactly ON the axis, not just in a
+    % plane parallel to it. A2 ends up on the axis too "for free": after
+    % the rotation, A1->A2 is an exact multiple of TARGETAXIS, so A2's
+    % off-axis coordinates already equal A1's before this translation,
+    % and the same uniform shift zeroes them both at once. A1's (and
+    % A2's) coordinate ALONG the axis is left as-is -- only translated by
+    % the same shift as everything else, so the molecule isn't otherwise
+    % moved along the axis. A pure rotation+translation never changes any
+    % bond length or angle.
         if numel(lastAtomsSelection) ~= 2
             return
         end
@@ -821,12 +830,15 @@ updateBondsTable();
         end
         R = rotationAligningVectors(v / vLen, targetAxis);
         pivot = xyz(a,:);
-        xyz = (xyz - pivot) * R' + pivot;
+        xyzRot = (xyz - pivot) * R' + pivot;
+        offAxis = ~logical(targetAxis);
+        shift = zeros(1, 3);
+        shift(offAxis) = -xyzRot(a, offAxis);
+        xyz = xyzRot + shift;
         updateAtomsTable();
         redraw();
         snapshotPush();
-        statusLabel.Text = sprintf('Aligned atoms %d->%d with the %s axis (atom %d kept fixed).', ...
-            a, b, alignAxisDD.Value, a);
+        statusLabel.Text = sprintf('Aligned atoms %d->%d onto the %s axis.', a, b, alignAxisDD.Value);
     end
 
 % -------------------------------------------------------------------------
