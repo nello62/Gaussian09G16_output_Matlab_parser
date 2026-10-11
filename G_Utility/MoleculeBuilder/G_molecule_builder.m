@@ -20,6 +20,16 @@ function G_molecule_builder()
 %       the Atoms table's X/Y/Z columns, or "Optimize structure")
 %     - "Bond selected pair"        -> select exactly two rows in the
 %       Atoms table, then toggle a bond between them
+%     - "Align A1->A2 to axis"      -> select exactly two rows in the
+%       Atoms table (A1 = lower row index, A2 = higher one, since a
+%       UITABLE's multi-selection is reported sorted, not in click order)
+%       and rotate the whole molecule rigidly about A1 so the A1->A2
+%       direction lines up with the chosen axis (X/Y/Z); A1 itself does
+%       not move. Useful to orient a molecule along a bond/axis of
+%       interest (e.g. before reading off a dipole component by eye, or
+%       just for a cleaner view) -- purely a rotation, bond lengths/angles
+%       are unaffected (ROTATIONALIGNINGVECTORS applies a single rigid
+%       rotation to every atom).
 %     - Atoms/Bonds tables          -> direct numeric/symbol/bond-order
 %       editing, and row selection (selects the corresponding atom)
 %     - Click an atom directly in the 3D view -> selects it (same as
@@ -193,22 +203,28 @@ bondPairBtn = uibutton(tabBuild, 'push', 'Position', [5 285 160 28], ...
 removeBondBtn = uibutton(tabBuild, 'push', 'Position', [170 285 160 28], ...
     'Text', 'Remove selected bond', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRemoveBond());
 
-uilabel(tabBuild, 'Position', [5 255 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
-bondsTable = uitable(tabBuild, 'Position', [5 120 sidebarW-40 130], ...
+uilabel(tabBuild, 'Position', [5 256 40 18], 'Text', 'Axis:');
+alignAxisDD = uidropdown(tabBuild, 'Position', [48 253 55 24], ...
+    'Items', {'X','Y','Z'}, 'Value', 'Z');
+alignBtn = uibutton(tabBuild, 'push', 'Position', [108 253 sidebarW-143 24], ...
+    'Text', 'Align A1->A2 to axis', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToAxis());
+
+uilabel(tabBuild, 'Position', [5 225 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
+bondsTable = uitable(tabBuild, 'Position', [5 110 sidebarW-40 110], ...
     'ColumnName', {'Atom1','Atom2','Order'}, ...
     'ColumnEditable', [false false true], ...
     'CellEditCallback', @(s,e) onBondsTableEdit(e), ...
     'CellSelectionCallback', @(s,e) onBondsTableSelection(e));
 
-optMethodDD = uidropdown(tabBuild, 'Position', [5 90 sidebarW-40 22], ...
+optMethodDD = uidropdown(tabBuild, 'Position', [5 80 sidebarW-40 22], ...
     'Items', {'Quick cleanup (built-in)', 'Open Babel: MMFF94', 'Open Babel: MMFF94s', 'Open Babel: UFF'}, ...
     'Value', 'Quick cleanup (built-in)');
-uibutton(tabBuild, 'push', 'Position', [5 58 sidebarW-40 28], ...
+uibutton(tabBuild, 'push', 'Position', [5 46 sidebarW-40 28], ...
     'Text', 'Optimize structure', 'ButtonPushedFcn', @(s,e) onOptimizeStructure());
 
-undoBtn = uibutton(tabBuild, 'push', 'Position', [5 20 160 30], ...
+undoBtn = uibutton(tabBuild, 'push', 'Position', [5 8 160 30], ...
     'Text', 'Undo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onUndo());
-redoBtn = uibutton(tabBuild, 'push', 'Position', [170 20 160 30], ...
+redoBtn = uibutton(tabBuild, 'push', 'Position', [170 8 160 30], ...
     'Text', 'Redo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRedo());
 
 % ---- "Gaussian Job" tab ---------------------------------------------------
@@ -506,6 +522,7 @@ updateBondsTable();
         addBondedBtn.Enable    = matlab.lang.OnOffSwitchState(selAtomIdx >= 1);
         removeAtomBtn.Enable   = matlab.lang.OnOffSwitchState(selAtomIdx >= 1);
         bondPairBtn.Enable     = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
+        alignBtn.Enable        = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
         removeBondBtn.Enable   = matlab.lang.OnOffSwitchState(~isempty(lastBondsSelection));
     end
 
@@ -703,6 +720,37 @@ updateBondsTable();
     end
 
 % -------------------------------------------------------------------------
+    function R = rotationAligningVectors(u, w)
+    % Returns the rotation matrix R (3x3, so that for a row vector p,
+    % P_ROTATED = p*R') with R*u(:) == w(:), for unit row vectors U, W.
+    % Closed form (cross-product/Rodrigues variant, avoids normalizing the
+    % rotation axis explicitly): with cr = cross(u,w), c = dot(u,w), and
+    % K = skew(cr), R = I + K + K^2*(1-c)/||cr||^2 -- equivalent to the
+    % standard sin/cos Rodrigues formula since ||cr|| = sin(theta) and
+    % c = cos(theta) for unit U, W.
+        c = dot(u, w);
+        cr = cross(u, w);
+        s2 = dot(cr, cr);
+        if s2 < 1e-12
+            if c > 0
+                R = eye(3);
+            else
+                % U and W point in exactly opposite directions: rotate 180
+                % degrees about any axis perpendicular to U.
+                perp = cross(u, [1 0 0]);
+                if norm(perp) < 1e-6
+                    perp = cross(u, [0 1 0]);
+                end
+                n = perp / norm(perp);
+                R = 2 * (n' * n) - eye(3);
+            end
+            return
+        end
+        K = [0 -cr(3) cr(2); cr(3) 0 -cr(1); -cr(2) cr(1) 0];
+        R = eye(3) + K + K*K*((1 - c) / s2);
+    end
+
+% -------------------------------------------------------------------------
     function onRemoveAtom()
         if selAtomIdx < 1
             return
@@ -744,6 +792,41 @@ updateBondsTable();
         updateBondsTable();
         redraw();
         snapshotPush();
+    end
+
+% -------------------------------------------------------------------------
+    function onAlignToAxis()
+    % A1 = lastAtomsSelection(1) (lower row index -- UITABLE multi-selection
+    % is always reported sorted, so "A1"/"A2" here is an index convention,
+    % not click order; same convention ONBONDPAIR already uses). Rotates
+    % every atom rigidly about A1 (A1 itself stays put) so the A1->A2
+    % direction becomes the chosen +X/+Y/+Z axis. A pure rotation never
+    % changes any bond length or angle.
+        if numel(lastAtomsSelection) ~= 2
+            return
+        end
+        a = lastAtomsSelection(1);
+        b = lastAtomsSelection(2);
+        v = xyz(b,:) - xyz(a,:);
+        vLen = norm(v);
+        if vLen < 1e-9
+            uialert(fig, 'The two selected atoms are at the same position; there is no direction to align.', ...
+                'Cannot align');
+            return
+        end
+        switch alignAxisDD.Value
+            case 'X', targetAxis = [1 0 0];
+            case 'Y', targetAxis = [0 1 0];
+            otherwise, targetAxis = [0 0 1];
+        end
+        R = rotationAligningVectors(v / vLen, targetAxis);
+        pivot = xyz(a,:);
+        xyz = (xyz - pivot) * R' + pivot;
+        updateAtomsTable();
+        redraw();
+        snapshotPush();
+        statusLabel.Text = sprintf('Aligned atoms %d->%d with the %s axis (atom %d kept fixed).', ...
+            a, b, alignAxisDD.Value, a);
     end
 
 % -------------------------------------------------------------------------
