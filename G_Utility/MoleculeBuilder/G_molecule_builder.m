@@ -68,7 +68,16 @@ function G_molecule_builder()
 %       otherwise make an object's own ButtonDownFcn unreliable -- so
 %       ROTATE3D is explicitly disabled (its Enable set back to 'off'
 %       right after G16_draw_molecule turns it back on) for as long as
-%       "Move atoms" stays checked, and re-enabled when unchecked.
+%       "Move atoms" stays checked, and re-enabled when unchecked. While
+%       actively dragging, the bottom status strip shows the atom's live
+%       x/y/z as the mouse moves (updated every ONMOUSEMOVE call, i.e.
+%       every frame of the drag).
+%
+%   The 3D view keeps a visible outer frame (axes box) at all times --
+%   G16_DRAW_MOLECULE itself calls AXIS(ax,'off') on every redraw (hiding
+%   box/ticks/labels), so REDRAW turns AX.Visible/AX.Box back on right
+%   after, every time, the same "re-assert after every call" pattern
+%   already used for ROTATE3D's Enable property above.
 %
 %   Reuses, rather than reimplements:
 %     - G16_DRAW_MOLECULE for the entire live 3D CPK preview (it already
@@ -418,6 +427,15 @@ updateBondsTable();
             uialert(fig, ME.message, 'G16_draw_molecule error');
             return
         end
+        % G16_draw_molecule calls AXIS(ax,'off') itself on every call
+        % (hides the box/ticks/labels entirely) -- turned back on here,
+        % every redraw, so the 3D view always keeps a visible outer frame
+        % (same "re-assert after every call" pattern REDRAW already uses
+        % for ROTATE3D's own Enable property, for the same reason: the
+        % upstream function resets it unconditionally each time).
+        ax.Visible = 'on';
+        ax.Box = 'on';
+        ax.XGrid = 'off'; ax.YGrid = 'off'; ax.ZGrid = 'off';
         if selAtomIdx >= 1 && selAtomIdx <= numel(symbols)
             hold(ax, 'on');
             plot3(ax, xyz(selAtomIdx,1), xyz(selAtomIdx,2), xyz(selAtomIdx,3), 'o', ...
@@ -526,6 +544,8 @@ updateBondsTable();
         end
         t = dot(dragPlanePoint - rayNear, dragPlaneNormal) / denom;
         xyz(dragIdx, :) = rayNear + t * rayDir;
+        statusLabel.Text = sprintf('Moving atom %d (%s): x=%.4f, y=%.4f, z=%.4f', ...
+            dragIdx, symbols{dragIdx}, xyz(dragIdx,1), xyz(dragIdx,2), xyz(dragIdx,3));
         updateAtomsTable();
         redraw();
     end
