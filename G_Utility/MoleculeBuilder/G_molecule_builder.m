@@ -52,7 +52,11 @@ function G_molecule_builder()
 %       +/-X/Y/Z reference lines through the origin, colored red/green/blue
 %       and labelled, so the alignment is visually obvious in the 3D view.
 %     - Atoms/Bonds tables          -> direct numeric/symbol/bond-order
-%       editing, and row selection (selects the corresponding atom)
+%       editing, and row selection (selects the corresponding atom). The
+%       Bonds table also shows a read-only "Length (A)" column, the live
+%       Euclidean distance between the two bonded atoms' current XYZ --
+%       kept in sync on every xyz-changing action (atom add, table edit,
+%       drag, alignment, structure optimization).
 %     - Click an atom directly in the 3D view -> selects it (same as
 %       selecting its row). With "Move atoms" checked, click-and-drag an
 %       atom instead moves it, confined to the screen-parallel plane
@@ -257,8 +261,8 @@ showAxesCheck = uicheckbox(tabBuild, 'Position', [5 201 sidebarW-40 22], ...
 
 uilabel(tabBuild, 'Position', [5 175 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
 bondsTable = uitable(tabBuild, 'Position', [5 120 sidebarW-40 50], ...
-    'ColumnName', {'Atom1','Atom2','Order'}, ...
-    'ColumnEditable', [false false true], ...
+    'ColumnName', {'Atom1','Atom2','Order','Length (A)'}, ...
+    'ColumnEditable', [false false true false], ...
     'CellEditCallback', @(s,e) onBondsTableEdit(e), ...
     'CellSelectionCallback', @(s,e) onBondsTableSelection(e));
 
@@ -547,6 +551,7 @@ updateBondsTable();
         statusLabel.Text = sprintf('Moving atom %d (%s): x=%.4f, y=%.4f, z=%.4f', ...
             dragIdx, symbols{dragIdx}, xyz(dragIdx,1), xyz(dragIdx,2), xyz(dragIdx,3));
         updateAtomsTable();
+        updateBondsTable();
         redraw();
     end
 
@@ -577,11 +582,12 @@ updateBondsTable();
 % -------------------------------------------------------------------------
     function updateBondsTable()
         n = size(bondList, 1);
-        data = cell(n, 3);
+        data = cell(n, 4);
         for i = 1:n
             data{i,1} = int32(bondList(i,1));
             data{i,2} = int32(bondList(i,2));
             data{i,3} = int32(bondList(i,3));
+            data{i,4} = norm(xyz(bondList(i,1),:) - xyz(bondList(i,2),:));
         end
         bondsTable.Data = data;
     end
@@ -1055,6 +1061,7 @@ updateBondsTable();
                 xyz(row,3) = evt.NewData;
         end
         updateAtomsTable();
+        updateBondsTable();
         redraw();
         snapshotPush();
     end
@@ -1188,6 +1195,7 @@ updateBondsTable();
             return
         end
         updateAtomsTable();
+        updateBondsTable();
         redraw();
         snapshotPush();
         statusLabel.Text = sprintf('%s applied. Refine further by hand, or run a real "opt" job in Gaussian.', method);
