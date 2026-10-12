@@ -30,6 +30,17 @@ function G_molecule_builder()
 %       bond/axis of interest (e.g. before reading off a dipole component
 %       by eye, or just for a cleaner view) -- purely a rigid motion,
 %       bond lengths/angles are unaffected.
+%     - "Align A1->A2 to vector"    -> same as the above, but the target
+%       direction is an arbitrary vector [x,y,z] typed into the "Vec"
+%       fields instead of a coordinate axis -- e.g. a molecule's own
+%       dipole moment vector (as reported by a Gaussian job on it), to
+%       view the molecule relative to that direction. A1 ends up exactly
+%       on the line through the origin along that vector (its component
+%       perpendicular to the vector is zeroed), A2 (and any other atom
+%       already collinear with A1/A2) lands on it too, same "for free"
+%       reasoning as the axis case -- see RIGIDALIGNPAIRTOVECTOR, which
+%       both this and "Align A1->A2 to axis" call (a coordinate axis is
+%       just one particular choice of vector).
 %     - "Align A1-A2-A3 to plane"   -> select exactly three rows in the
 %       Atoms table (A1/A2/A3 = ascending row index, same convention) and
 %       rigidly rotate+translate the molecule so all three end up lying
@@ -132,7 +143,7 @@ historyIdx   = 1;
 % G16_MODEVIEWER/G_RAMAN_BROWSER).
 % -------------------------------------------------------------------------
 winW = 1200;
-winH = 860;
+winH = 900;
 tmpFig = figure('Visible', 'off');
 drawnow;
 tmpPos = tmpFig.Position;
@@ -171,79 +182,86 @@ ax.Toolbar.Visible = 'on';
 % -------------------------------------------------------------------------
 % Sidebar: fixed top controls (element picker, add/remove), tab group below
 % -------------------------------------------------------------------------
-uilabel(sidebar, 'Position', [10 790 sidebarW-20 24], ...
+uilabel(sidebar, 'Position', [10 830 sidebarW-20 24], ...
     'Text', 'Molecule Builder', 'FontWeight', 'bold', 'FontSize', 14);
 
-uibutton(sidebar, 'push', 'Position', [10 758 175 28], ...
+uibutton(sidebar, 'push', 'Position', [10 798 175 28], ...
     'Text', 'New molecule', 'ButtonPushedFcn', @(s,e) onNewMolecule());
-uibutton(sidebar, 'push', 'Position', [195 758 175 28], ...
+uibutton(sidebar, 'push', 'Position', [195 798 175 28], ...
     'Text', 'Load input...', 'ButtonPushedFcn', @(s,e) onLoadGjf());
 
-uilabel(sidebar, 'Position', [10 728 100 18], 'Text', 'Element:', 'FontWeight', 'bold');
-elementDD = uidropdown(sidebar, 'Position', [10 704 sidebarW-30 24], ...
+uilabel(sidebar, 'Position', [10 768 100 18], 'Text', 'Element:', 'FontWeight', 'bold');
+elementDD = uidropdown(sidebar, 'Position', [10 744 sidebarW-30 24], ...
     'Items', {'H','C','N','O','F','P','S','Cl','Br','I','Si','B','Other...'}, 'Value', 'C');
-uilabel(sidebar, 'Position', [10 676 115 18], 'Text', 'Custom symbol:');
-customSymField = uieditfield(sidebar, 'text', 'Position', [125 674 sidebarW-155 22], 'Value', '');
+uilabel(sidebar, 'Position', [10 716 115 18], 'Text', 'Custom symbol:');
+customSymField = uieditfield(sidebar, 'text', 'Position', [125 714 sidebarW-155 22], 'Value', '');
 
-addFirstBtn = uibutton(sidebar, 'push', 'Position', [10 642 175 28], ...
+addFirstBtn = uibutton(sidebar, 'push', 'Position', [10 682 175 28], ...
     'Text', 'Add first atom', 'ButtonPushedFcn', @(s,e) onAddFirstAtom());
-addBondedBtn = uibutton(sidebar, 'push', 'Position', [195 642 175 28], ...
+addBondedBtn = uibutton(sidebar, 'push', 'Position', [195 682 175 28], ...
     'Text', 'Add bonded atom', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAddBondedAtom());
-removeAtomBtn = uibutton(sidebar, 'push', 'Position', [10 610 sidebarW-30 28], ...
+removeAtomBtn = uibutton(sidebar, 'push', 'Position', [10 650 sidebarW-30 28], ...
     'Text', 'Remove selected atom', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRemoveAtom());
 
-moveModeCheck = uicheckbox(sidebar, 'Position', [10 580 sidebarW-30 22], ...
+moveModeCheck = uicheckbox(sidebar, 'Position', [10 620 sidebarW-30 22], ...
     'Text', 'Move atoms (click + drag in 3D view; disables view rotation while on)', ...
     'Value', false, 'ValueChangedFcn', @(s,e) redraw());
 
-tg = uitabgroup(sidebar, 'Position', [5 10 sidebarW-10 565]);
+tg = uitabgroup(sidebar, 'Position', [5 10 sidebarW-10 605]);
 tabBuild = uitab(tg, 'Title', 'Atoms & Bonds');
 tabJob   = uitab(tg, 'Title', 'Gaussian Job');
 
 % ---- "Atoms & Bonds" tab -------------------------------------------------
-uilabel(tabBuild, 'Position', [5 560 150 18], 'Text', 'Atoms:', 'FontWeight', 'bold');
-atomsTable = uitable(tabBuild, 'Position', [5 320 sidebarW-40 235], ...
+uilabel(tabBuild, 'Position', [5 600 150 18], 'Text', 'Atoms:', 'FontWeight', 'bold');
+atomsTable = uitable(tabBuild, 'Position', [5 360 sidebarW-40 235], ...
     'ColumnName', {'Idx','Symbol','X','Y','Z'}, ...
     'ColumnEditable', [false true true true true], ...
     'CellEditCallback', @(s,e) onAtomsTableEdit(e), ...
     'CellSelectionCallback', @(s,e) onAtomsTableSelection(e));
 
-bondPairBtn = uibutton(tabBuild, 'push', 'Position', [5 285 160 28], ...
+bondPairBtn = uibutton(tabBuild, 'push', 'Position', [5 325 160 28], ...
     'Text', 'Bond selected pair', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onBondPair());
-removeBondBtn = uibutton(tabBuild, 'push', 'Position', [170 285 160 28], ...
+removeBondBtn = uibutton(tabBuild, 'push', 'Position', [170 325 160 28], ...
     'Text', 'Remove selected bond', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRemoveBond());
 
-uilabel(tabBuild, 'Position', [5 256 40 18], 'Text', 'Axis:');
-alignAxisDD = uidropdown(tabBuild, 'Position', [48 253 55 24], ...
+uilabel(tabBuild, 'Position', [5 296 40 18], 'Text', 'Axis:');
+alignAxisDD = uidropdown(tabBuild, 'Position', [48 293 55 24], ...
     'Items', {'X','Y','Z'}, 'Value', 'Z');
-alignBtn = uibutton(tabBuild, 'push', 'Position', [108 253 sidebarW-143 24], ...
+alignBtn = uibutton(tabBuild, 'push', 'Position', [108 293 sidebarW-143 24], ...
     'Text', 'Align A1->A2 to axis', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToAxis());
 
-uilabel(tabBuild, 'Position', [5 224 40 18], 'Text', 'Plane:');
-alignPlaneDD = uidropdown(tabBuild, 'Position', [48 221 55 24], ...
+uilabel(tabBuild, 'Position', [5 264 40 18], 'Text', 'Plane:');
+alignPlaneDD = uidropdown(tabBuild, 'Position', [48 261 55 24], ...
     'Items', {'XY','XZ','YZ'}, 'Value', 'XY');
-alignPlaneBtn = uibutton(tabBuild, 'push', 'Position', [108 221 sidebarW-143 24], ...
+alignPlaneBtn = uibutton(tabBuild, 'push', 'Position', [108 261 sidebarW-143 24], ...
     'Text', 'Align A1-A2-A3 to plane', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToPlane());
 
-showAxesCheck = uicheckbox(tabBuild, 'Position', [5 191 sidebarW-40 22], ...
+uilabel(tabBuild, 'Position', [5 234 30 18], 'Text', 'Vec:');
+vecXField = uieditfield(tabBuild, 'numeric', 'Position', [38 231 44 24], 'Value', 0);
+vecYField = uieditfield(tabBuild, 'numeric', 'Position', [85 231 44 24], 'Value', 0);
+vecZField = uieditfield(tabBuild, 'numeric', 'Position', [132 231 44 24], 'Value', 1);
+alignVecBtn = uibutton(tabBuild, 'push', 'Position', [179 231 sidebarW-174 24], ...
+    'Text', 'Align A1->A2 to vector', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onAlignToVector());
+
+showAxesCheck = uicheckbox(tabBuild, 'Position', [5 201 sidebarW-40 22], ...
     'Text', 'Show X/Y/Z axes (dashed)', 'Value', false, 'ValueChangedFcn', @(s,e) redraw());
 
-uilabel(tabBuild, 'Position', [5 165 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
-bondsTable = uitable(tabBuild, 'Position', [5 110 sidebarW-40 50], ...
+uilabel(tabBuild, 'Position', [5 175 150 18], 'Text', 'Bonds:', 'FontWeight', 'bold');
+bondsTable = uitable(tabBuild, 'Position', [5 120 sidebarW-40 50], ...
     'ColumnName', {'Atom1','Atom2','Order'}, ...
     'ColumnEditable', [false false true], ...
     'CellEditCallback', @(s,e) onBondsTableEdit(e), ...
     'CellSelectionCallback', @(s,e) onBondsTableSelection(e));
 
-optMethodDD = uidropdown(tabBuild, 'Position', [5 80 sidebarW-40 22], ...
+optMethodDD = uidropdown(tabBuild, 'Position', [5 90 sidebarW-40 22], ...
     'Items', {'Quick cleanup (built-in)', 'Open Babel: MMFF94', 'Open Babel: MMFF94s', 'Open Babel: UFF'}, ...
     'Value', 'Quick cleanup (built-in)');
-uibutton(tabBuild, 'push', 'Position', [5 47 sidebarW-40 28], ...
+uibutton(tabBuild, 'push', 'Position', [5 57 sidebarW-40 28], ...
     'Text', 'Optimize structure', 'ButtonPushedFcn', @(s,e) onOptimizeStructure());
 
-undoBtn = uibutton(tabBuild, 'push', 'Position', [5 9 160 30], ...
+undoBtn = uibutton(tabBuild, 'push', 'Position', [5 19 160 30], ...
     'Text', 'Undo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onUndo());
-redoBtn = uibutton(tabBuild, 'push', 'Position', [170 9 160 30], ...
+redoBtn = uibutton(tabBuild, 'push', 'Position', [170 19 160 30], ...
     'Text', 'Redo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRedo());
 
 % ---- "Gaussian Job" tab ---------------------------------------------------
@@ -555,6 +573,7 @@ updateBondsTable();
         removeAtomBtn.Enable   = matlab.lang.OnOffSwitchState(selAtomIdx >= 1);
         bondPairBtn.Enable     = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
         alignBtn.Enable        = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
+        alignVecBtn.Enable     = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 2);
         alignPlaneBtn.Enable   = matlab.lang.OnOffSwitchState(numel(lastAtomsSelection) == 3);
         removeBondBtn.Enable   = matlab.lang.OnOffSwitchState(~isempty(lastBondsSelection));
     end
@@ -828,51 +847,100 @@ updateBondsTable();
     end
 
 % -------------------------------------------------------------------------
+    function xyzOut = rigidAlignPairToVector(xyzIn, aIdx, bIdx, targetDir)
+    % Rotates+translates XYZIN (every atom, rigidly -- one rotation
+    % matrix applied to the whole set) so that atom BIDX - atom AIDX
+    % points exactly along TARGETDIR (any nonzero 3-vector; not
+    % necessarily unit length, and not necessarily a coordinate axis --
+    % that is the one difference from an earlier, axis-only version of
+    % this, which special-cased X/Y/Z; this is the same algorithm,
+    % generalized). Atom AIDX itself ends up exactly ON the line through
+    % the origin in direction TARGETDIR (its component perpendicular to
+    % TARGETDIR is zeroed); BIDX lands on that same line too "for free",
+    % since after the rotation AIDX->BIDX is an exact multiple of
+    % TARGETDIR, so BIDX's perpendicular component already equals
+    % AIDX's before this translation. Any other atom that was already
+    % collinear with AIDX/BIDX beforehand lands on the line too, for the
+    % same reason (collinearity with a fixed line is itself invariant
+    % under a rigid motion) -- same "for free" logic as
+    % ONALIGNTOPLANE's coplanar case. Never changes any bond length or
+    % angle. Throws (caught by the caller, shown via UIALERT) if the two
+    % atoms coincide or TARGETDIR is the zero vector.
+        v = xyzIn(bIdx,:) - xyzIn(aIdx,:);
+        vLen = norm(v);
+        if vLen < 1e-9
+            error('G_molecule_builder:coincidentAtoms', ...
+                'The two selected atoms are at the same position; there is no direction to align.');
+        end
+        dLen = norm(targetDir);
+        if dLen < 1e-9
+            error('G_molecule_builder:zeroVector', ...
+                'The target vector is zero; there is no direction to align to.');
+        end
+        dHat = targetDir / dLen;
+        R = rotationAligningVectors(v / vLen, dHat);
+        pivot = xyzIn(aIdx,:);
+        xyzRot = (xyzIn - pivot) * R' + pivot;
+        perp = xyzRot(aIdx,:) - dot(xyzRot(aIdx,:), dHat) * dHat;
+        xyzOut = xyzRot - perp;
+    end
+
+% -------------------------------------------------------------------------
     function onAlignToAxis()
     % A1 = lastAtomsSelection(1) (lower row index -- UITABLE multi-selection
     % is always reported sorted, so "A1"/"A2" here is an index convention,
-    % not click order; same convention ONBONDPAIR already uses). Rotates
-    % every atom rigidly about A1 so the A1->A2 direction becomes the
-    % chosen +X/+Y/+Z axis, then translates the whole molecule so A1's two
-    % off-axis coordinates become exactly 0 (e.g. for the X axis,
-    % A1_y = A1_z = 0) -- A1 then lies exactly ON the axis, not just in a
-    % plane parallel to it. A2 ends up on the axis too "for free": after
-    % the rotation, A1->A2 is an exact multiple of TARGETAXIS, so A2's
-    % off-axis coordinates already equal A1's before this translation,
-    % and the same uniform shift zeroes them both at once. A1's (and
-    % A2's) coordinate ALONG the axis is left as-is -- only translated by
-    % the same shift as everything else, so the molecule isn't otherwise
-    % moved along the axis. A pure rotation+translation never changes any
-    % bond length or angle.
+    % not click order; same convention ONBONDPAIR already uses). See
+    % RIGIDALIGNPAIRTOVECTOR for the algorithm (a coordinate axis is just
+    % one particular TARGETDIR).
         if numel(lastAtomsSelection) ~= 2
             return
         end
         a = lastAtomsSelection(1);
         b = lastAtomsSelection(2);
-        v = xyz(b,:) - xyz(a,:);
-        vLen = norm(v);
-        if vLen < 1e-9
-            uialert(fig, 'The two selected atoms are at the same position; there is no direction to align.', ...
-                'Cannot align');
-            return
-        end
         switch alignAxisDD.Value
             case 'X', targetAxis = [1 0 0];
             case 'Y', targetAxis = [0 1 0];
             otherwise, targetAxis = [0 0 1];
         end
-        R = rotationAligningVectors(v / vLen, targetAxis);
-        pivot = xyz(a,:);
-        xyzRot = (xyz - pivot) * R' + pivot;
-        offAxis = ~logical(targetAxis);
-        shift = zeros(1, 3);
-        shift(offAxis) = -xyzRot(a, offAxis);
-        xyz = xyzRot + shift;
+        try
+            xyz = rigidAlignPairToVector(xyz, a, b, targetAxis);
+        catch ME
+            uialert(fig, ME.message, 'Cannot align');
+            return
+        end
         showAxesCheck.Value = true;
         updateAtomsTable();
         redraw();
         snapshotPush();
         statusLabel.Text = sprintf('Aligned atoms %d->%d onto the %s axis.', a, b, alignAxisDD.Value);
+    end
+
+% -------------------------------------------------------------------------
+    function onAlignToVector()
+    % Same as ONALIGNTOAXIS, but the target direction is an arbitrary
+    % vector typed into the Vec x/y/z fields instead of a coordinate
+    % axis -- e.g. the molecule's own dipole moment vector (as reported
+    % by a Gaussian 'opt'/'freq' job on it), to view/orient the molecule
+    % relative to that direction. See RIGIDALIGNPAIRTOVECTOR for the
+    % algorithm.
+        if numel(lastAtomsSelection) ~= 2
+            return
+        end
+        a = lastAtomsSelection(1);
+        b = lastAtomsSelection(2);
+        targetDir = [vecXField.Value, vecYField.Value, vecZField.Value];
+        try
+            xyz = rigidAlignPairToVector(xyz, a, b, targetDir);
+        catch ME
+            uialert(fig, ME.message, 'Cannot align');
+            return
+        end
+        showAxesCheck.Value = true;
+        updateAtomsTable();
+        redraw();
+        snapshotPush();
+        statusLabel.Text = sprintf('Aligned atoms %d->%d onto vector [%.4g %.4g %.4g].', ...
+            a, b, targetDir(1), targetDir(2), targetDir(3));
     end
 
 % -------------------------------------------------------------------------
