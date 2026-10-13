@@ -126,10 +126,17 @@ function G_molecule_builder()
 %       which a plain Pople/Dunning basis does not cover and which
 %       normally needs an effective core potential (ECP). The table lists
 %       every unique element currently in the molecule ("Refresh element
-%       list" resyncs it after adding/removing atoms); type the exact
-%       name Basis Set Exchange uses for each one (case-insensitive but
-%       otherwise exact -- e.g. '6-31G*', 'def2-TZVP', 'LANL2DZ'; browse
-%       basissetexchange.org to find the right name/spelling). On
+%       list" resyncs it after adding/removing atoms). Select a row to
+%       populate "Available basis sets for selected element" with every
+%       basis Basis Set Exchange actually offers for that element (a
+%       combo box, not free text -- select more than one row to apply the
+%       same choice to all of them at once) -- backed by an element ->
+%       basis-names database ("Refresh basis database" rebuilds it from
+%       Basis Set Exchange's own metadata listing, ~4 s; cached to
+%       BSE_BASIS_DB.MAT next to this file afterward, so later sessions
+%       load it instantly with no network call, until refreshed again).
+%       The basis-name cell remains directly editable too, for a name not
+%       yet in the cached database. On
 %       "Generate Gaussian input...", elements sharing one basis name are
 %       fetched together (one API call per distinct name), reassembled
 %       into a single gen/genecp block (G_WRITE_GJF's 'BasisBlock'), and
@@ -166,6 +173,15 @@ dragPlaneNormal  = [0 0 1];% drag constraint plane: its normal (view direction w
 
 historyStack = {struct('symbols', {{}}, 'xyz', zeros(0,3), 'bondList', zeros(0,3))};
 historyIdx   = 1;
+
+% Element -> {cell array of Basis Set Exchange basis names covering it},
+% built by FETCHBSEELEMENTBASISDB and cached to BSEDBCACHEFILE (see
+% ENSUREBSEDB) so a later session does not need the network just to
+% browse what is available. Empty until first needed (toggling on "Use
+% custom per-element basis", or "Refresh basis database").
+bseElementDB       = containers.Map('KeyType', 'char', 'ValueType', 'any');
+lastBasisTableSelection = []; % currently-selected BASISTABLE rows (for BASISCHOICEDD)
+bseDbCacheFile = fullfile(fileparts(mfilename('fullpath')), 'bse_basis_db.mat');
 
 [cpkColorsTbl, covRadiiTbl] = G_element_table(); %#ok<ASGLU> -- cpkColorsTbl unused here, kept for symmetry/future use
 
@@ -299,44 +315,52 @@ redoBtn = uibutton(tabBuild, 'push', 'Position', [170 26 160 30], ...
     'Text', 'Redo', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) onRedo());
 
 % ---- "Gaussian Job" tab ---------------------------------------------------
-uilabel(tabJob, 'Position', [5 555 150 18], 'Text', 'Route:');
-routeField = uieditfield(tabJob, 'text', 'Position', [5 530 sidebarW-40 24], ...
+uilabel(tabJob, 'Position', [5 607 150 18], 'Text', 'Route:');
+routeField = uieditfield(tabJob, 'text', 'Position', [5 579 sidebarW-40 24], ...
     'Value', '# opt freq b3lyp/6-31g(d)');
-uilabel(tabJob, 'Position', [5 500 150 18], 'Text', 'Title:');
-titleField = uieditfield(tabJob, 'text', 'Position', [5 475 sidebarW-40 24], 'Value', 'Built with G_molecule_builder');
+uilabel(tabJob, 'Position', [5 551 150 18], 'Text', 'Title:');
+titleField = uieditfield(tabJob, 'text', 'Position', [5 523 sidebarW-40 24], 'Value', 'Built with G_molecule_builder');
 
-uilabel(tabJob, 'Position', [5 440 80 18], 'Text', 'Charge:');
-chargeField = uieditfield(tabJob, 'numeric', 'Position', [90 438 100 24], ...
+uilabel(tabJob, 'Position', [5 492 80 18], 'Text', 'Charge:');
+chargeField = uieditfield(tabJob, 'numeric', 'Position', [90 489 100 24], ...
     'Value', 0, 'RoundFractionalValues', 'on');
-uilabel(tabJob, 'Position', [200 440 60 18], 'Text', 'Mult.:');
-multField = uieditfield(tabJob, 'numeric', 'Position', [255 438 90 24], ...
+uilabel(tabJob, 'Position', [200 492 60 18], 'Text', 'Mult.:');
+multField = uieditfield(tabJob, 'numeric', 'Position', [255 489 90 24], ...
     'Value', 1, 'Limits', [1 Inf], 'RoundFractionalValues', 'on');
 
-uilabel(tabJob, 'Position', [5 400 sidebarW-40 18], 'Text', 'Link0 (optional):', 'FontWeight', 'bold');
-uilabel(tabJob, 'Position', [5 375 50 18], 'Text', '%chk:');
-chkField = uieditfield(tabJob, 'text', 'Position', [60 373 sidebarW-95 22], 'Value', '');
-uilabel(tabJob, 'Position', [5 345 50 18], 'Text', '%mem:');
-memField = uieditfield(tabJob, 'text', 'Position', [60 343 sidebarW-95 22], 'Value', '');
-uilabel(tabJob, 'Position', [5 315 100 18], 'Text', '%nprocshared:');
-nprocField = uieditfield(tabJob, 'numeric', 'Position', [110 313 sidebarW-145 22], ...
+uilabel(tabJob, 'Position', [5 461 sidebarW-40 18], 'Text', 'Link0 (optional):', 'FontWeight', 'bold');
+uilabel(tabJob, 'Position', [5 435 50 18], 'Text', '%chk:');
+chkField = uieditfield(tabJob, 'text', 'Position', [60 433 sidebarW-95 22], 'Value', '');
+uilabel(tabJob, 'Position', [5 407 50 18], 'Text', '%mem:');
+memField = uieditfield(tabJob, 'text', 'Position', [60 405 sidebarW-95 22], 'Value', '');
+uilabel(tabJob, 'Position', [5 379 100 18], 'Text', '%nprocshared:');
+nprocField = uieditfield(tabJob, 'numeric', 'Position', [110 377 sidebarW-145 22], ...
     'Value', 0, 'Limits', [0 Inf], 'RoundFractionalValues', 'on');
 
-uilabel(tabJob, 'Position', [5 289 sidebarW-40 18], 'Text', 'Custom basis sets (optional):', 'FontWeight', 'bold');
-useCustomBasisCheck = uicheckbox(tabJob, 'Position', [5 261 sidebarW-40 22], ...
+uilabel(tabJob, 'Position', [5 347 sidebarW-40 18], 'Text', 'Custom basis sets (optional):', 'FontWeight', 'bold');
+useCustomBasisCheck = uicheckbox(tabJob, 'Position', [5 319 sidebarW-40 22], ...
     'Text', 'Use custom per-element basis (Basis Set Exchange)', 'Value', false, ...
     'Tooltip', ['Downloads a basis set (and ECP, if the element needs one) per row below ', ...
         'from basissetexchange.org and writes a gen/genecp block instead of using Route''s basis name.'], ...
     'ValueChangedFcn', @(s,e) onToggleCustomBasis());
-basisTable = uitable(tabJob, 'Position', [5 113 sidebarW-40 140], ...
+basisTable = uitable(tabJob, 'Position', [5 171 sidebarW-40 140], ...
     'ColumnName', {'Element', 'BSE basis name'}, ...
     'ColumnWidth', {80, 300}, ...
     'ColumnEditable', [false true], ...
     'Enable', 'off', ...
-    'Tooltip', 'Type the exact name as shown on basissetexchange.org, e.g. 6-31G*, def2-TZVP, LANL2DZ.');
-refreshBasisBtn = uibutton(tabJob, 'push', 'Position', [5 81 sidebarW-40 24], ...
-    'Text', 'Refresh element list', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) refreshBasisTable());
+    'Tooltip', 'Pick a row, then choose from the combo box below -- or type a name directly if you know it.', ...
+    'CellSelectionCallback', @(s,e) onBasisTableSelection(e));
 
-uibutton(tabJob, 'push', 'Position', [5 20 sidebarW-40 36], ...
+uilabel(tabJob, 'Position', [5 145 sidebarW-40 18], 'Text', 'Available basis sets for selected element:');
+basisChoiceDD = uidropdown(tabJob, 'Position', [5 117 sidebarW-40 24], ...
+    'Items', {'(select a row above)'}, 'Enable', 'off', ...
+    'ValueChangedFcn', @(s,e) onBasisChoiceChanged());
+uibutton(tabJob, 'push', 'Position', [5 85 200 24], ...
+    'Text', 'Refresh basis database', 'ButtonPushedFcn', @(s,e) onRefreshBseDb());
+dbStatusLabel = uilabel(tabJob, 'Position', [210 85 sidebarW-245 24], ...
+    'Text', 'Not loaded yet.', 'FontColor', [0.45 0.45 0.45], 'FontSize', 10);
+
+uibutton(tabJob, 'push', 'Position', [5 35 sidebarW-40 36], ...
     'Text', 'Generate Gaussian input...', 'FontWeight', 'bold', ...
     'ButtonPushedFcn', @(s,e) onGenerateInput());
 
@@ -1247,9 +1271,174 @@ updateBondsTable();
         else
             basisTable.Enable = 'off';
         end
-        refreshBasisBtn.Enable = matlab.lang.OnOffSwitchState(useCustomBasisCheck.Value);
+        refreshBasisBtn.Enable = matlab.lang.OnOffSwitchState(useCustomBasisCheck.Value); %#ok<STRNU>
         if useCustomBasisCheck.Value
             refreshBasisTable();
+            ensureBseDb();
+        else
+            basisChoiceDD.Enable = 'off';
+            basisChoiceDD.Items = {'(select a row above)'};
+            lastBasisTableSelection = [];
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function onBasisTableSelection(evt)
+    % Populates BASISCHOICEDD with the Basis Set Exchange basis names that
+    % actually cover the selected row's element (from BSEELEMENTDB), so
+    % picking one is a combo-box choice instead of typing an exact name
+    % from memory. With more than one row selected, choosing a value in
+    % the combo box (ONBASISCHOICECHANGED) applies it to all of them.
+        if isempty(evt.Indices)
+            lastBasisTableSelection = [];
+            basisChoiceDD.Enable = 'off';
+            basisChoiceDD.Items = {'(select a row above)'};
+            return
+        end
+        lastBasisTableSelection = unique(evt.Indices(:,1));
+        sym = basisTable.Data{lastBasisTableSelection(1), 1};
+        if isKey(bseElementDB, sym)
+            opts = bseElementDB(sym);
+        else
+            opts = {};
+        end
+        if isempty(opts)
+            basisChoiceDD.Items = {sprintf('(no basis sets found for %s)', sym)};
+            basisChoiceDD.Enable = 'off';
+            return
+        end
+        basisChoiceDD.Items = opts;
+        basisChoiceDD.Enable = 'on';
+        current = strtrim(basisTable.Data{lastBasisTableSelection(1), 2});
+        if ~isempty(current) && any(strcmp(opts, current))
+            basisChoiceDD.Value = current;
+        else
+            basisChoiceDD.Value = opts{1};
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function onBasisChoiceChanged()
+        if isempty(lastBasisTableSelection)
+            return
+        end
+        val = basisChoiceDD.Value;
+        for r = lastBasisTableSelection(:)'
+            basisTable.Data{r, 2} = val;
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function ensureBseDb()
+    % Loads the element->basis-names database from BSEDBCACHEFILE if it
+    % exists (near-instant, no network); otherwise downloads it from
+    % Basis Set Exchange's metadata API (a few seconds) and caches it for
+    % next time. A session only ever does this once (BSEELEMENTDB.Count
+    % short-circuits a repeat call), until ONREFRESHBSEDB is used
+    % explicitly to pick up basis sets Basis Set Exchange has added since.
+        if bseElementDB.Count > 0
+            return
+        end
+        if isfile(bseDbCacheFile)
+            try
+                s = load(bseDbCacheFile, 'db', 'nIndexed', 'builtAt');
+                bseElementDB = s.db;
+                dbStatusLabel.Text = sprintf('%d basis sets indexed (cached, built %s).', s.nIndexed, s.builtAt);
+                return
+            catch
+                % Corrupt/unreadable cache -- fall through to a live fetch.
+            end
+        end
+        onRefreshBseDb();
+    end
+
+% -------------------------------------------------------------------------
+    function onRefreshBseDb()
+        statusLabel.Text = 'Downloading the Basis Set Exchange element database (one-time, a few seconds)...';
+        drawnow;
+        try
+            [db, nIndexed] = fetchBseElementBasisDB(); % DB/NINDEXED named exactly for SAVE below
+            builtAt = char(datetime('now'));
+            bseElementDB = db;
+            save(bseDbCacheFile, 'db', 'nIndexed', 'builtAt');
+            dbStatusLabel.Text = sprintf('%d basis sets indexed (downloaded just now).', nIndexed);
+            statusLabel.Text = 'Basis Set Exchange element database ready.';
+        catch ME
+            uialert(fig, ME.message, 'Basis Set Exchange error');
+            statusLabel.Text = 'Could not download the Basis Set Exchange database (see error).';
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function [db, nIndexed] = fetchBseElementBasisDB()
+    % Downloads Basis Set Exchange's full metadata listing (ALL basis
+    % sets in one call -- confirmed ~527 KB, ~4 s, no per-basis-set
+    % round trip needed) and inverts it into DB: element symbol -> sorted
+    % cell array of basis display names that cover it (only ROLE=='orbital'
+    % entries -- excludes auxiliary RI-fitting/J-fitting basis sets, which
+    % are not valid as a regular gen/genecp orbital basis).
+    %
+    % Each entry's top-level JSON key becomes an arbitrary, sanitized
+    % MATLAB field name once WEBREAD/JSONDECODE parses it (e.g. basis
+    % names contain '-', '(', '*', which are not valid identifier
+    % characters) -- irrelevant here, since the REAL name is read back out
+    % of that same entry's own .display_name field, never from the
+    % fieldname itself. The per-version element list is reached the same
+    % way: ENTRY.LATEST_VERSION is itself a numeral-string key ('0', '1',
+    % ...) that MATLAB.LANG.MAKEVALIDNAME prefixes with 'x' when used as a
+    % struct field (confirmed directly against the live API) -- applying
+    % that same transform here is what makes ENTRY.VERSIONS.(verField)
+    % resolve correctly instead of guessing.
+        ptSymbols = { ...
+            'H','He','Li','Be','B','C','N','O','F','Ne', ...
+            'Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca', ...
+            'Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn', ...
+            'Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr', ...
+            'Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn', ...
+            'Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd', ...
+            'Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb', ...
+            'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg', ...
+            'Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th', ...
+            'Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm', ...
+            'Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt','Ds', ...
+            'Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'};
+
+        raw = webread('https://www.basissetexchange.org/api/metadata/', weboptions('Timeout', 30));
+        fn = fieldnames(raw);
+        db = containers.Map('KeyType', 'char', 'ValueType', 'any');
+        nIndexed = 0;
+        for i = 1:numel(fn)
+            entry = raw.(fn{i});
+            if ~strcmp(entry.role, 'orbital')
+                continue
+            end
+            verField = matlab.lang.makeValidName(entry.latest_version);
+            if ~isfield(entry.versions, verField)
+                continue
+            end
+            els = entry.versions.(verField).elements;
+            name = entry.display_name;
+            nIndexed = nIndexed + 1;
+            for k = 1:numel(els)
+                z = round(str2double(els{k}));
+                if isnan(z) || z < 1 || z > numel(ptSymbols)
+                    continue
+                end
+                sym = ptSymbols{z};
+                if isKey(db, sym)
+                    lst = db(sym);
+                else
+                    lst = {};
+                end
+                lst{end+1} = name; %#ok<AGROW>
+                db(sym) = lst;
+            end
+        end
+        ks = keys(db);
+        for i = 1:numel(ks)
+            lst = db(ks{i});
+            [~, ord] = sort(lower(lst));
+            db(ks{i}) = lst(ord);
         end
     end
 

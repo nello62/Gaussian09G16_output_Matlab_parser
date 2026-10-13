@@ -40,5 +40,9 @@
 # mcc build output (run build_standalone.sh to regenerate), not source.
 /G_Utility/GaussianViewer/build/
 
+# Downloaded Basis Set Exchange element->basis-names cache (rebuilt via
+# "Refresh basis database" in the app), not source.
+/G_Utility/MoleculeBuilder/bse_basis_db.mat
+
 # Claude Code local tool settings (machine-specific, not project content)
 **/.claude/
