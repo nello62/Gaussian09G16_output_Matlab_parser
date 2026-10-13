@@ -119,6 +119,25 @@ function G_molecule_builder()
 %           install it.
 %       Neither is a substitute for a real Gaussian 'opt' job -- both just
 %       de-crumple a hand-placed sketch first.
+%     - "Custom basis sets (optional)" (Gaussian Job tab): check "Use
+%       custom per-element basis (Basis Set Exchange)" to download a
+%       basis set per element from basissetexchange.org instead of using
+%       Route's own basis name -- needed e.g. for a heavy atom like Au,
+%       which a plain Pople/Dunning basis does not cover and which
+%       normally needs an effective core potential (ECP). The table lists
+%       every unique element currently in the molecule ("Refresh element
+%       list" resyncs it after adding/removing atoms); type the exact
+%       name Basis Set Exchange uses for each one (case-insensitive but
+%       otherwise exact -- e.g. '6-31G*', 'def2-TZVP', 'LANL2DZ'; browse
+%       basissetexchange.org to find the right name/spelling). On
+%       "Generate Gaussian input...", elements sharing one basis name are
+%       fetched together (one API call per distinct name), reassembled
+%       into a single gen/genecp block (G_WRITE_GJF's 'BasisBlock'), and
+%       Route's first 'method/basis' token is rewritten to 'gen' (or
+%       'genecp' if any element's data included an ECP) -- Route is
+%       updated in place so what gets written is always visible. Requires
+%       an internet connection at generate time; a download/name error is
+%       shown via UIALERT rather than silently falling back.
 %
 %   See also G16_DRAW_MOLECULE, G_ELEMENT_TABLE, G_WRITE_GJF,
 %            G_READ_INPUT, G16_GET_BOND_LENGTH, G_ROUGH_OPTIMIZE_GEOMETRY,
@@ -301,6 +320,21 @@ memField = uieditfield(tabJob, 'text', 'Position', [60 343 sidebarW-95 22], 'Val
 uilabel(tabJob, 'Position', [5 315 100 18], 'Text', '%nprocshared:');
 nprocField = uieditfield(tabJob, 'numeric', 'Position', [110 313 sidebarW-145 22], ...
     'Value', 0, 'Limits', [0 Inf], 'RoundFractionalValues', 'on');
+
+uilabel(tabJob, 'Position', [5 289 sidebarW-40 18], 'Text', 'Custom basis sets (optional):', 'FontWeight', 'bold');
+useCustomBasisCheck = uicheckbox(tabJob, 'Position', [5 261 sidebarW-40 22], ...
+    'Text', 'Use custom per-element basis (Basis Set Exchange)', 'Value', false, ...
+    'Tooltip', ['Downloads a basis set (and ECP, if the element needs one) per row below ', ...
+        'from basissetexchange.org and writes a gen/genecp block instead of using Route''s basis name.'], ...
+    'ValueChangedFcn', @(s,e) onToggleCustomBasis());
+basisTable = uitable(tabJob, 'Position', [5 113 sidebarW-40 140], ...
+    'ColumnName', {'Element', 'BSE basis name'}, ...
+    'ColumnWidth', {80, 300}, ...
+    'ColumnEditable', [false true], ...
+    'Enable', 'off', ...
+    'Tooltip', 'Type the exact name as shown on basissetexchange.org, e.g. 6-31G*, def2-TZVP, LANL2DZ.');
+refreshBasisBtn = uibutton(tabJob, 'push', 'Position', [5 81 sidebarW-40 24], ...
+    'Text', 'Refresh element list', 'Enable', 'off', 'ButtonPushedFcn', @(s,e) refreshBasisTable());
 
 uibutton(tabJob, 'push', 'Position', [5 20 sidebarW-40 36], ...
     'Text', 'Generate Gaussian input...', 'FontWeight', 'bold', ...
@@ -1204,24 +1238,233 @@ updateBondsTable();
     end
 
 % -------------------------------------------------------------------------
+    function onToggleCustomBasis()
+    % UITABLE's own Enable property (unlike UIBUTTON's) rejects a
+    % MATLAB.LANG.ONOFFSWITCHSTATE value -- it only accepts the literal
+    % strings 'on'/'off'/'inactive' -- confirmed the hard way.
+        if useCustomBasisCheck.Value
+            basisTable.Enable = 'on';
+        else
+            basisTable.Enable = 'off';
+        end
+        refreshBasisBtn.Enable = matlab.lang.OnOffSwitchState(useCustomBasisCheck.Value);
+        if useCustomBasisCheck.Value
+            refreshBasisTable();
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function refreshBasisTable()
+    % Resyncs BASISTABLE's rows with the molecule's current unique
+    % elements (in order of first appearance), keeping whatever basis
+    % name the user already typed for an element that is still present,
+    % and dropping rows for elements no longer in the molecule. Never
+    % guesses a basis name for a new row (left blank) -- ROUTE's own
+    % basis keyword (e.g. '6-31g(d)') is usually not a valid Basis Set
+    % Exchange name as-is (BSE calls that one '6-31G*'), so silently
+    % prefilling it would just set the user up for a confusing fetch
+    % error; typing the exact Basis Set Exchange name is on the user.
+        uniqueSyms = unique(symbols, 'stable');
+        oldData = basisTable.Data;
+        newData = cell(numel(uniqueSyms), 2);
+        for i = 1:numel(uniqueSyms)
+            newData{i,1} = uniqueSyms{i};
+            prevVal = '';
+            if ~isempty(oldData)
+                match = find(strcmp(oldData(:,1), uniqueSyms{i}), 1);
+                if ~isempty(match)
+                    prevVal = oldData{match,2};
+                end
+            end
+            newData{i,2} = prevVal;
+        end
+        basisTable.Data = newData;
+    end
+
+% -------------------------------------------------------------------------
+    function [sec, errMsg] = fetchBseBlock(basisName, elemList)
+    % Downloads BASISNAME (as the user typed it -- Basis Set Exchange
+    % matches basis names case-insensitively but is otherwise exact, e.g.
+    % '6-31G*' works but '6-31g(d)' does not, since that is not one of
+    % its registered names/aliases for that same basis set) for ELEMLIST
+    % (cellstr of element symbols) in one API call, in Gaussian94 text
+    % format -- already shaped exactly like a Gaussian gen/genecp block
+    % (basis functions per element, each terminated by '****', then, only
+    % if any requested element needs one, a blank line followed by its
+    % ECP data), just with a few leading '!'-commented header lines that
+    % SPLITBASISECP strips. Returns SEC='' and a human-readable ERRMSG
+    % (network failure, or the basis name not existing on Basis Set
+    % Exchange) instead of throwing, so the caller can show one UIALERT
+    % that names which basis/element pair failed.
+        sec = ''; errMsg = '';
+        url = sprintf('https://www.basissetexchange.org/api/basis/%s/format/gaussian94/?elements=%s', ...
+            urlencode(basisName), strjoin(elemList, ','));
+        try
+            raw = webread(url, weboptions('ContentType', 'text', 'Timeout', 20));
+        catch ME
+            errMsg = sprintf('Could not download basis "%s" for %s from Basis Set Exchange: %s', ...
+                basisName, strjoin(elemList, ', '), ME.message);
+            return
+        end
+        raw = char(raw);
+        if startsWith(strtrim(raw), '{')
+            % An error response (basis name not found, etc.) comes back
+            % as a JSON object instead of the plain-text block.
+            msg = '';
+            try
+                j = jsondecode(raw);
+                if isfield(j, 'message'), msg = j.message; end
+            catch
+            end
+            if isempty(msg)
+                msg = sprintf('basis "%s" not found', basisName);
+            end
+            errMsg = sprintf('Basis Set Exchange: %s (check the exact name at basissetexchange.org).', msg);
+            return
+        end
+        sec = raw;
+    end
+
+% -------------------------------------------------------------------------
+    function [basisPart, ecpPart] = splitBasisEcp(raw)
+    % Strips Basis Set Exchange's leading '!'-commented header banner and
+    % leading blank lines, then splits the remainder on the first blank
+    % line: everything before it is the basis-functions section
+    % (BASISPART), everything after (if anything) is the ECP section
+    % (ECPPART, '' if the basis has no ECP for the requested elements).
+    % Confirmed directly against the live API (multi-element requests,
+    % e.g. elements=C,Au) that neither section itself contains a blank
+    % line between per-element blocks -- only the one separating the two
+    % sections -- so this single split is sufficient regardless of how
+    % many elements were requested in one call.
+        % 'CollapseDelimiters', false is required here -- STRSPLIT's
+        % default (true) treats consecutive newlines as a single
+        % delimiter, which silently eats exactly the blank line this
+        % function needs to find (the one separating the basis-function
+        % section from the ECP section) -- confirmed the hard way: without
+        % it, BLANKIDX below is never found for real ECP-bearing
+        % responses, so ONGENERATEINPUT always fell back to 'gen' even
+        % when an element's data included ECP.
+        lines = strsplit(raw, newline, 'CollapseDelimiters', false);
+        lines = lines(~startsWith(strtrim(lines), '!'));
+        while ~isempty(lines) && isempty(strtrim(lines{1}))
+            lines(1) = [];
+        end
+        blankIdx = find(cellfun(@(l) isempty(strtrim(l)), lines), 1);
+        if isempty(blankIdx)
+            basisPart = strtrim(strjoin(lines, newline));
+            ecpPart = '';
+        else
+            basisPart = strtrim(strjoin(lines(1:blankIdx-1), newline));
+            ecpPart   = strtrim(strjoin(lines(blankIdx+1:end), newline));
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function [basisBlock, genKeyword, errMsg] = buildCustomBasisBlock()
+    % Groups BASISTABLE's rows by basis name (so elements sharing one
+    % basis are fetched together in a single API call), downloads each
+    % group via FETCHBSEBLOCK, and reassembles the pieces in the order
+    % Gaussian's gen/genecp format requires: ALL elements' basis-function
+    % sections first (concatenated with no blank line between them, same
+    % as a native multi-element Basis Set Exchange response), then -- only
+    % if at least one group had ECP data -- a single blank line, then ALL
+    % ECP sections concatenated the same way. GENKEYWORD is 'genecp' in
+    % that case, 'gen' otherwise, for the caller to splice into ROUTE.
+        basisBlock = ''; genKeyword = 'gen'; errMsg = '';
+        refreshBasisTable();
+        rows = basisTable.Data;
+        if isempty(rows)
+            errMsg = 'No atoms in the molecule yet.';
+            return
+        end
+        names = strtrim(rows(:,2));
+        if any(cellfun(@isempty, names))
+            missing = rows(cellfun(@isempty, names), 1);
+            errMsg = sprintf('Enter a Basis Set Exchange basis name for: %s.', strjoin(missing, ', '));
+            return
+        end
+        uniqueNames = unique(names, 'stable');
+        basisParts = {};
+        ecpParts = {};
+        for k = 1:numel(uniqueNames)
+            bn = uniqueNames{k};
+            elems = rows(strcmp(names, bn), 1);
+            [sec, errMsg] = fetchBseBlock(bn, elems);
+            if ~isempty(errMsg)
+                basisBlock = '';
+                return
+            end
+            [bPart, ePart] = splitBasisEcp(sec);
+            if ~isempty(bPart), basisParts{end+1} = bPart; end %#ok<AGROW>
+            if ~isempty(ePart), ecpParts{end+1}   = ePart; end %#ok<AGROW>
+        end
+        basisBlock = strjoin(basisParts, newline);
+        if ~isempty(ecpParts)
+            basisBlock = sprintf('%s\n\n%s', basisBlock, strjoin(ecpParts, newline));
+            genKeyword = 'genecp';
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function [newRoute, errMsg] = replaceRouteBasis(route, genKeyword)
+    % Rewrites ROUTE's first 'method/basis' token (e.g.
+    % 'b3lyp/6-31g(d)' -> 'b3lyp/gen' or '.../genecp') to use GENKEYWORD
+    % instead of a library basis name, so it matches the custom
+    % BASISBLOCK written after the molecule specification. Only the first
+    % such token is touched (route lines with more than one '/' are
+    % unusual; if that ever matters, the user can still edit the Route
+    % field by hand -- it is updated in place with the result, not hidden).
+        errMsg = '';
+        newRoute = regexprep(route, '(\S+)/\S+', ['$1/' genKeyword], 'once');
+        if strcmp(newRoute, route)
+            errMsg = sprintf(['Could not find a "method/basis" token (e.g. "b3lyp/6-31g(d)") in the ', ...
+                'Route field to replace with "%s". Edit Route to include one, or uncheck ', ...
+                '"Use custom per-element basis".'], genKeyword);
+        end
+    end
+
+% -------------------------------------------------------------------------
     function onGenerateInput()
         if isempty(symbols)
             uialert(fig, 'Add at least one atom first.', 'Nothing to export');
             return
         end
+
+        route = routeField.Value;
+        nvArgs = {'Title', titleField.Value};
+        if ~isempty(strtrim(chkField.Value)), nvArgs = [nvArgs, {'Chk', strtrim(chkField.Value)}]; end
+        if ~isempty(strtrim(memField.Value)), nvArgs = [nvArgs, {'Mem', strtrim(memField.Value)}]; end
+        if nprocField.Value > 0,              nvArgs = [nvArgs, {'Nproc', nprocField.Value}];      end
+
+        if useCustomBasisCheck.Value
+            statusLabel.Text = 'Downloading basis set(s) from Basis Set Exchange...';
+            drawnow;
+            [basisBlock, genKeyword, errMsg] = buildCustomBasisBlock();
+            if ~isempty(errMsg)
+                uialert(fig, errMsg, 'Basis Set Exchange error');
+                statusLabel.Text = 'Basis set download failed (see error).';
+                return
+            end
+            [newRoute, errMsg] = replaceRouteBasis(route, genKeyword);
+            if ~isempty(errMsg)
+                uialert(fig, errMsg, 'Cannot set gen/genecp');
+                statusLabel.Text = 'Basis set download failed (see error).';
+                return
+            end
+            route = newRoute;
+            routeField.Value = newRoute; % keep the UI showing what will actually be written
+            nvArgs = [nvArgs, {'BasisBlock', basisBlock}];
+        end
+
         [f, p] = pickSaveFile({'*.gjf', 'Gaussian input (*.gjf)'}, 'Save Gaussian input as', 'molecule.gjf');
         if isequal(f, 0)
             return
         end
         outFile = fullfile(p, f);
 
-        nvArgs = {'Title', titleField.Value};
-        if ~isempty(strtrim(chkField.Value)), nvArgs = [nvArgs, {'Chk', strtrim(chkField.Value)}]; end
-        if ~isempty(strtrim(memField.Value)), nvArgs = [nvArgs, {'Mem', strtrim(memField.Value)}]; end
-        if nprocField.Value > 0,              nvArgs = [nvArgs, {'Nproc', nprocField.Value}];      end
-
         try
-            G_write_gjf(outFile, symbols, xyz, routeField.Value, chargeField.Value, multField.Value, nvArgs{:});
+            G_write_gjf(outFile, symbols, xyz, route, chargeField.Value, multField.Value, nvArgs{:});
             statusLabel.Text = sprintf('Gaussian input saved: %s', outFile);
         catch ME
             uialert(fig, ME.message, 'G_write_gjf error');
