@@ -44,5 +44,9 @@
 # "Refresh basis database" in the app), not source.
 /G_Utility/MoleculeBuilder/bse_basis_db.mat
 
+# Downloaded Basis Set Exchange basis-function/ECP block cache (grows
+# automatically as basis sets are downloaded), not source.
+/G_Utility/MoleculeBuilder/bse_basis_blocks.mat
+
 # Claude Code local tool settings (machine-specific, not project content)
 **/.claude/

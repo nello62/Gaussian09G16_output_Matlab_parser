@@ -158,8 +158,12 @@ function G_molecule_builder()
 %           explicit basis functions (and ECP data, if any) -- works for
 %           any basis Basis Set Exchange has, including ones Gaussian
 %           itself does not know by name (e.g. a Stuttgart/Cologne ECP
-%           basis for a heavy metal). Requires an internet connection at
-%           generate time.
+%           basis for a heavy metal). Every (basis name, element) block
+%           actually downloaded is cached to BSE_BASIS_BLOCKS.MAT next to
+%           this file, so reusing the same basis/element pair later --
+%           even in a different molecule, even in a later session --
+%           needs no network call; only elements never seen before for
+%           that basis name are fetched (one call covers all of them).
 %       On "Generate Gaussian input...", Route's first 'method/basis'
 %       token is rewritten to 'gen' (or 'genecp' if any row ended up with
 %       ECP data) and G_WRITE_GJF's 'BasisBlock' carries the combined
@@ -203,6 +207,15 @@ historyIdx   = 1;
 bseElementDB       = containers.Map('KeyType', 'char', 'ValueType', 'any');
 lastBasisTableSelection = []; % currently-selected BASISTABLE rows (for BASISCHOICEDD)
 bseDbCacheFile = fullfile(fileparts(mfilename('fullpath')), 'bse_basis_db.mat');
+
+% (basis name, element) -> struct('basisPart',...,'ecpPart',...) for every
+% basis-function/ECP block actually downloaded so far this session or a
+% past one (see FETCHBSEBLOCKCACHED), so re-generating with a basis/element
+% pair already seen before needs no network call. Persisted incrementally
+% to BSEBLOCKCACHEFILE after every new download (not just on exit), so a
+% crash or closing the app does not lose already-downloaded data.
+bseBlockCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
+bseBlockCacheFile = fullfile(fileparts(mfilename('fullpath')), 'bse_basis_blocks.mat');
 
 [cpkColorsTbl, covRadiiTbl] = G_element_table(); %#ok<ASGLU> -- cpkColorsTbl unused here, kept for symmetry/future use
 
@@ -1545,25 +1558,31 @@ updateBondsTable();
     end
 
 % -------------------------------------------------------------------------
-    function [basisPart, ecpPart] = splitBasisEcp(raw)
+    function [basisBySym, ecpBySym] = splitBasisEcpPerElement(raw)
     % Strips Basis Set Exchange's leading '!'-commented header banner and
-    % leading blank lines, then splits the remainder on the first blank
-    % line: everything before it is the basis-functions section
-    % (BASISPART), everything after (if anything) is the ECP section
-    % (ECPPART, '' if the basis has no ECP for the requested elements).
-    % Confirmed directly against the live API (multi-element requests,
-    % e.g. elements=C,Au) that neither section itself contains a blank
-    % line between per-element blocks -- only the one separating the two
-    % sections -- so this single split is sufficient regardless of how
-    % many elements were requested in one call.
-        % 'CollapseDelimiters', false is required here -- STRSPLIT's
-        % default (true) treats consecutive newlines as a single
-        % delimiter, which silently eats exactly the blank line this
-        % function needs to find (the one separating the basis-function
-        % section from the ECP section) -- confirmed the hard way: without
-        % it, BLANKIDX below is never found for real ECP-bearing
-        % responses, so ONGENERATEINPUT always fell back to 'gen' even
-        % when an element's data included ECP.
+    % leading blank lines, splits the remainder on the first blank line
+    % into a basis-functions section and (if present) an ECP section --
+    % same top-level split as before -- then further splits EACH section
+    % into one chunk per element, so FETCHBSEBLOCKCACHED can cache (and
+    % later reuse) individual elements instead of only a whole fetched
+    % group. Returns two CONTAINERS.MAP, keyed by UPPER(element symbol),
+    % each chunk's text kept verbatim (including its header line, and for
+    % the basis section its trailing '****').
+    %
+    % 'CollapseDelimiters', false is required on the initial STRSPLIT --
+    % its default (true) treats consecutive newlines as a single
+    % delimiter, which silently eats exactly the blank line that
+    % separates the two sections -- confirmed the hard way: without it,
+    % an ECP-bearing response was never detected as having one.
+    %
+    % Confirmed directly against the live API that neither section
+    % contains a blank line between its own per-element chunks (even with
+    % more than one ECP-bearing element requested together, e.g.
+    % elements=Au,Pt -- their two ECP entries sit back-to-back with no
+    % blank line between them), so chunk boundaries are found instead by
+    % recognizing each element's header line: exactly the pattern
+    % "SYM1 [SYM2 ...] 0" (one or more symbols, then a literal lone '0')
+    % that both sections' per-element blocks start with.
         lines = strsplit(raw, newline, 'CollapseDelimiters', false);
         lines = lines(~startsWith(strtrim(lines), '!'));
         while ~isempty(lines) && isempty(strtrim(lines{1}))
@@ -1571,12 +1590,129 @@ updateBondsTable();
         end
         blankIdx = find(cellfun(@(l) isempty(strtrim(l)), lines), 1);
         if isempty(blankIdx)
-            basisPart = strtrim(strjoin(lines, newline));
-            ecpPart = '';
+            basisLines = lines;
+            ecpLines = {};
         else
-            basisPart = strtrim(strjoin(lines(1:blankIdx-1), newline));
-            ecpPart   = strtrim(strjoin(lines(blankIdx+1:end), newline));
+            basisLines = lines(1:blankIdx-1);
+            ecpLines   = lines(blankIdx+1:end);
         end
+        basisBySym = groupLinesByElementHeader(basisLines);
+        ecpBySym   = groupLinesByElementHeader(ecpLines);
+    end
+
+% -------------------------------------------------------------------------
+    function bySym = groupLinesByElementHeader(lines)
+    % Splits LINES (one section's worth, e.g. all basis-function chunks or
+    % all ECP chunks for a multi-element Basis Set Exchange response) into
+    % per-element chunks, detected by their header line: trimmed, exactly
+    % "SYM1 [SYM2 ...] 0" (whitespace-separated tokens, last one a literal
+    % '0') -- a pattern no basis-function or ECP data line matches (those
+    % either have a non-'0' last token, e.g. a shell's "7   1.00", or are a
+    % single bare integer like an ECP shell's electron count). A header
+    % naming more than one symbol (BASIS SET EXCHANGE does this when
+    % several requested elements share byte-identical data) stores the
+    % same chunk text under each of its symbols.
+        bySym = containers.Map('KeyType', 'char', 'ValueType', 'any');
+        curSyms = {};
+        curLines = {};
+        for i = 1:numel(lines)
+            ln = lines{i};
+            toks = strsplit(strtrim(ln));
+            if numel(toks) >= 2 && strcmp(toks{end}, '0')
+                if ~isempty(curSyms)
+                    storeChunk(curSyms, curLines);
+                end
+                curSyms = toks(1:end-1);
+                curLines = {ln};
+            elseif ~isempty(curSyms)
+                curLines{end+1} = ln; %#ok<AGROW>
+            end
+        end
+        if ~isempty(curSyms)
+            storeChunk(curSyms, curLines);
+        end
+        function storeChunk(syms, chunkLines)
+            chunk = strtrim(strjoin(chunkLines, newline));
+            for s = 1:numel(syms)
+                bySym(upper(syms{s})) = chunk;
+            end
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function ensureBseBlockCache()
+    % Loads the (basis name, element) -> downloaded-block cache from
+    % BSEBLOCKCACHEFILE if present (once per session; BSEBLOCKCACHE.COUNT
+    % short-circuits a repeat call) -- mirrors ENSUREBSEDB's pattern for
+    % the element-names index, but there is no "refresh" action for this
+    % one: unlike the names index (which can genuinely go stale as Basis
+    % Set Exchange adds new basis sets), a basis/element pair's own
+    % downloaded data does not change over time, so once cached it is
+    % reused indefinitely.
+        if bseBlockCache.Count > 0
+            return
+        end
+        if isfile(bseBlockCacheFile)
+            try
+                s = load(bseBlockCacheFile, 'blockCache');
+                bseBlockCache = s.blockCache;
+            catch
+                % Corrupt/unreadable cache -- start empty; it will be
+                % repopulated as basis/element pairs are fetched again.
+            end
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function saveBseBlockCache()
+        blockCache = bseBlockCache;
+        save(bseBlockCacheFile, 'blockCache');
+    end
+
+% -------------------------------------------------------------------------
+    function [bPart, ePart, errMsg] = fetchBseBlockCached(basisName, elemList)
+    % Same result as FETCHBSEBLOCK+SPLITBASISECP for BASISNAME/ELEMLIST,
+    % but serves any (basisName, element) pair already present in
+    % BSEBLOCKCACHE from local disk instead of the network, and fetches
+    % only the elements actually missing (one API call covers all of
+    % them, same as before) -- so the same basis name reused across
+    % different molecules downloads each element at most once, ever.
+        ensureBseBlockCache();
+        bnKey = upper(strtrim(basisName));
+        missing = {};
+        for i = 1:numel(elemList)
+            if ~isKey(bseBlockCache, sprintf('%s||%s', bnKey, upper(elemList{i})))
+                missing{end+1} = elemList{i}; %#ok<AGROW>
+            end
+        end
+        errMsg = '';
+        if ~isempty(missing)
+            [sec, errMsg] = fetchBseBlock(basisName, missing);
+            if ~isempty(errMsg)
+                bPart = ''; ePart = '';
+                return
+            end
+            [basisBySym, ecpBySym] = splitBasisEcpPerElement(sec);
+            for i = 1:numel(missing)
+                su = upper(missing{i});
+                entry = struct('basisPart', '', 'ecpPart', '');
+                if isKey(basisBySym, su), entry.basisPart = basisBySym(su); end
+                if isKey(ecpBySym, su),   entry.ecpPart   = ecpBySym(su);   end
+                bseBlockCache(sprintf('%s||%s', bnKey, su)) = entry;
+            end
+            saveBseBlockCache();
+        end
+        bParts = {}; eParts = {};
+        for i = 1:numel(elemList)
+            k = sprintf('%s||%s', bnKey, upper(elemList{i}));
+            if isKey(bseBlockCache, k)
+                e = bseBlockCache(k);
+                if ~isempty(e.basisPart), bParts{end+1} = e.basisPart; end %#ok<AGROW>
+                if ~isempty(e.ecpPart),   eParts{end+1} = e.ecpPart;   end %#ok<AGROW>
+            end
+        end
+        bPart = strjoin(unique(bParts, 'stable'), newline);
+        ePart = strjoin(unique(eParts, 'stable'), newline);
     end
 
 % -------------------------------------------------------------------------
@@ -1589,8 +1725,10 @@ updateBondsTable();
     % must be one Gaussian already recognizes; a group also gets an ECP
     % section when ISLIKELYECPBASISNAME recognizes the name as one of
     % Gaussian's built-in ECP-bearing families. A "Download (BSE)" group
-    % is fetched via FETCHBSEBLOCK instead (one API call per distinct
-    % name), which also works for names Gaussian does not have built in.
+    % is fetched via FETCHBSEBLOCKCACHED instead (one API call per
+    % distinct name, elements already downloaded before served from
+    % BSEBLOCKCACHE's on-disk cache instead), which also works for names
+    % Gaussian does not have built in.
     % Either way, the pieces are reassembled in the order Gaussian's
     % gen/genecp format requires: ALL basis-function sections first
     % (concatenated with no blank line between them), then -- only if at
@@ -1632,12 +1770,11 @@ updateBondsTable();
         for k = 1:numel(uniqueNames)
             bn = uniqueNames{k};
             elems = downloadRows(strcmp(downloadNames, bn), 1);
-            [sec, errMsg] = fetchBseBlock(bn, elems);
+            [bPart, ePart, errMsg] = fetchBseBlockCached(bn, elems);
             if ~isempty(errMsg)
                 basisBlock = '';
                 return
             end
-            [bPart, ePart] = splitBasisEcp(sec);
             if ~isempty(bPart), basisParts{end+1} = bPart; end %#ok<AGROW>
             if ~isempty(ePart), ecpParts{end+1}   = ePart; end %#ok<AGROW>
         end
