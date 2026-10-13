@@ -120,31 +120,52 @@ function G_molecule_builder()
 %       Neither is a substitute for a real Gaussian 'opt' job -- both just
 %       de-crumple a hand-placed sketch first.
 %     - "Custom basis sets (optional)" (Gaussian Job tab): check "Use
-%       custom per-element basis (Basis Set Exchange)" to download a
-%       basis set per element from basissetexchange.org instead of using
-%       Route's own basis name -- needed e.g. for a heavy atom like Au,
-%       which a plain Pople/Dunning basis does not cover and which
-%       normally needs an effective core potential (ECP). The table lists
-%       every unique element currently in the molecule ("Refresh element
-%       list" resyncs it after adding/removing atoms). Select a row to
-%       populate "Available basis sets for selected element" with every
-%       basis Basis Set Exchange actually offers for that element (a
-%       combo box, not free text -- select more than one row to apply the
-%       same choice to all of them at once) -- backed by an element ->
+%       custom per-element basis" to give elements a basis set other than
+%       Route's own -- needed e.g. for a heavy atom like Au, which a
+%       plain Pople/Dunning basis does not cover and which normally needs
+%       an effective core potential (ECP). The table lists every unique
+%       element currently in the molecule (resynced each time the
+%       checkbox is ticked, and again right before generating, so it
+%       always reflects the current atoms). Select a row to populate
+%       "Available basis sets for selected element" with every basis
+%       Basis Set Exchange actually offers for that element (a combo box,
+%       not free text -- select more than one row to apply the same
+%       choice to all of them at once) -- backed by an element ->
 %       basis-names database ("Refresh basis database" rebuilds it from
 %       Basis Set Exchange's own metadata listing, ~4 s; cached to
 %       BSE_BASIS_DB.MAT next to this file afterward, so later sessions
 %       load it instantly with no network call, until refreshed again).
 %       The basis-name cell remains directly editable too, for a name not
-%       yet in the cached database. On
-%       "Generate Gaussian input...", elements sharing one basis name are
-%       fetched together (one API call per distinct name), reassembled
-%       into a single gen/genecp block (G_WRITE_GJF's 'BasisBlock'), and
-%       Route's first 'method/basis' token is rewritten to 'gen' (or
-%       'genecp' if any element's data included an ECP) -- Route is
-%       updated in place so what gets written is always visible. Requires
-%       an internet connection at generate time; a download/name error is
-%       shown via UIALERT rather than silently falling back.
+%       yet in the cached database. Each row also has its own "Source"
+%       (a popup in the table itself), so different elements in the same
+%       molecule can be handled differently -- e.g. a plain basis by name
+%       for common elements, a downloaded ECP for one heavy atom, exactly
+%       as a hand-written Gaussian gen/genecp section normally mixes them:
+%         - "Name only" (default): writes the compact form Gaussian's own
+%           manual documents for mixing built-in basis sets, e.g.
+%           "C H O 0 / 6-311G(d,p) / ****" per group of elements sharing
+%           a name -- no network call, but the name must be one
+%           Gaussian's internal library already recognizes. A group also
+%           gets an ECP section ("genecp") when its name matches one of
+%           Gaussian's built-in ECP-bearing families
+%           (LANL2DZ/LANL2TZ/LANL08/SDD/CEP-*/SHC); other basis sets
+%           Gaussian has but this app doesn't recognize as ECP-bearing
+%           still work, just without an ECP section -- use "Download
+%           (BSE)" instead if one is actually needed.
+%         - "Download (BSE)": elements sharing one basis name (within
+%           this source) are fetched together (one API call per distinct
+%           name) and reassembled into the gen/genecp block with the
+%           explicit basis functions (and ECP data, if any) -- works for
+%           any basis Basis Set Exchange has, including ones Gaussian
+%           itself does not know by name (e.g. a Stuttgart/Cologne ECP
+%           basis for a heavy metal). Requires an internet connection at
+%           generate time.
+%       On "Generate Gaussian input...", Route's first 'method/basis'
+%       token is rewritten to 'gen' (or 'genecp' if any row ended up with
+%       ECP data) and G_WRITE_GJF's 'BasisBlock' carries the combined
+%       result -- Route is updated in place so what gets written is
+%       always visible. A download/name error is shown via UIALERT
+%       rather than silently falling back.
 %
 %   See also G16_DRAW_MOLECULE, G_ELEMENT_TABLE, G_WRITE_GJF,
 %            G_READ_INPUT, G16_GET_BOND_LENGTH, G_ROUGH_OPTIMIZE_GEOMETRY,
@@ -339,16 +360,23 @@ nprocField = uieditfield(tabJob, 'numeric', 'Position', [110 377 sidebarW-145 22
 
 uilabel(tabJob, 'Position', [5 347 sidebarW-40 18], 'Text', 'Custom basis sets (optional):', 'FontWeight', 'bold');
 useCustomBasisCheck = uicheckbox(tabJob, 'Position', [5 319 sidebarW-40 22], ...
-    'Text', 'Use custom per-element basis (Basis Set Exchange)', 'Value', false, ...
-    'Tooltip', ['Downloads a basis set (and ECP, if the element needs one) per row below ', ...
-        'from basissetexchange.org and writes a gen/genecp block instead of using Route''s basis name.'], ...
+    'Text', 'Use custom per-element basis', 'Value', false, ...
+    'Tooltip', ['Per element, write either a compact "by name" gen/genecp reference (no network ', ...
+        'call -- the name must be one Gaussian''s own internal library already recognizes) or ', ...
+        'download the explicit basis/ECP data from basissetexchange.org, instead of using ', ...
+        'Route''s basis name for everything.'], ...
     'ValueChangedFcn', @(s,e) onToggleCustomBasis());
 basisTable = uitable(tabJob, 'Position', [5 171 sidebarW-40 140], ...
-    'ColumnName', {'Element', 'BSE basis name'}, ...
-    'ColumnWidth', {80, 300}, ...
-    'ColumnEditable', [false true], ...
+    'ColumnName', {'Element', 'Basis name', 'Source'}, ...
+    'ColumnWidth', {55, 190, 140}, ...
+    'ColumnEditable', [false true true], ...
+    'ColumnFormat', {[], [], {'Name only', 'Download (BSE)'}}, ...
     'Enable', 'off', ...
-    'Tooltip', 'Pick a row, then choose from the combo box below -- or type a name directly if you know it.', ...
+    'Tooltip', ['Pick a row, then choose from the combo box below -- or type a name directly ', ...
+        'if you know it. "Source" picks how that row''s name is written: "Name only" (compact, ', ...
+        'no network call -- the name must be one Gaussian already has built in) or ', ...
+        '"Download (BSE)" (fetches the explicit basis/ECP data from Basis Set Exchange -- works ', ...
+        'for names Gaussian does not have built in, e.g. most exotic ECPs).'], ...
     'CellSelectionCallback', @(s,e) onBasisTableSelection(e));
 
 uilabel(tabJob, 'Position', [5 145 sidebarW-40 18], 'Text', 'Available basis sets for selected element:');
@@ -1271,7 +1299,6 @@ updateBondsTable();
         else
             basisTable.Enable = 'off';
         end
-        refreshBasisBtn.Enable = matlab.lang.OnOffSwitchState(useCustomBasisCheck.Value); %#ok<STRNU>
         if useCustomBasisCheck.Value
             refreshBasisTable();
             ensureBseDb();
@@ -1455,17 +1482,20 @@ updateBondsTable();
     % error; typing the exact Basis Set Exchange name is on the user.
         uniqueSyms = unique(symbols, 'stable');
         oldData = basisTable.Data;
-        newData = cell(numel(uniqueSyms), 2);
+        newData = cell(numel(uniqueSyms), 3);
         for i = 1:numel(uniqueSyms)
             newData{i,1} = uniqueSyms{i};
-            prevVal = '';
+            prevName = '';
+            prevSource = 'Name only';
             if ~isempty(oldData)
                 match = find(strcmp(oldData(:,1), uniqueSyms{i}), 1);
                 if ~isempty(match)
-                    prevVal = oldData{match,2};
+                    prevName = oldData{match,2};
+                    prevSource = oldData{match,3};
                 end
             end
-            newData{i,2} = prevVal;
+            newData{i,2} = prevName;
+            newData{i,3} = prevSource;
         end
         basisTable.Data = newData;
     end
@@ -1551,15 +1581,22 @@ updateBondsTable();
 
 % -------------------------------------------------------------------------
     function [basisBlock, genKeyword, errMsg] = buildCustomBasisBlock()
-    % Groups BASISTABLE's rows by basis name (so elements sharing one
-    % basis are fetched together in a single API call), downloads each
-    % group via FETCHBSEBLOCK, and reassembles the pieces in the order
-    % Gaussian's gen/genecp format requires: ALL elements' basis-function
-    % sections first (concatenated with no blank line between them, same
-    % as a native multi-element Basis Set Exchange response), then -- only
-    % if at least one group had ECP data -- a single blank line, then ALL
-    % ECP sections concatenated the same way. GENKEYWORD is 'genecp' in
-    % that case, 'gen' otherwise, for the caller to splice into ROUTE.
+    % Groups BASISTABLE's rows by basis name, separately within each
+    % "Source" choice (column 3): a "Name only" group is written directly
+    % as Gaussian's compact named gen/genecp syntax (e.g.
+    % "C H 0 / 6-311G(d,p) / ****"), which Gaussian resolves against its
+    % own internal library at run time -- no network call, but the name
+    % must be one Gaussian already recognizes; a group also gets an ECP
+    % section when ISLIKELYECPBASISNAME recognizes the name as one of
+    % Gaussian's built-in ECP-bearing families. A "Download (BSE)" group
+    % is fetched via FETCHBSEBLOCK instead (one API call per distinct
+    % name), which also works for names Gaussian does not have built in.
+    % Either way, the pieces are reassembled in the order Gaussian's
+    % gen/genecp format requires: ALL basis-function sections first
+    % (concatenated with no blank line between them), then -- only if at
+    % least one group had ECP data -- a single blank line, then ALL ECP
+    % sections concatenated the same way. GENKEYWORD is 'genecp' in that
+    % case, 'gen' otherwise, for the caller to splice into ROUTE.
         basisBlock = ''; genKeyword = 'gen'; errMsg = '';
         refreshBasisTable();
         rows = basisTable.Data;
@@ -1570,15 +1607,31 @@ updateBondsTable();
         names = strtrim(rows(:,2));
         if any(cellfun(@isempty, names))
             missing = rows(cellfun(@isempty, names), 1);
-            errMsg = sprintf('Enter a Basis Set Exchange basis name for: %s.', strjoin(missing, ', '));
+            errMsg = sprintf('Enter a basis set name for: %s.', strjoin(missing, ', '));
             return
         end
-        uniqueNames = unique(names, 'stable');
+        sources = rows(:,3);
         basisParts = {};
         ecpParts = {};
+
+        nameOnlyRows = rows(strcmp(sources, 'Name only'), :);
+        nameOnlyNames = strtrim(nameOnlyRows(:,2));
+        uniqueNames = unique(nameOnlyNames, 'stable');
         for k = 1:numel(uniqueNames)
             bn = uniqueNames{k};
-            elems = rows(strcmp(names, bn), 1);
+            elems = nameOnlyRows(strcmp(nameOnlyNames, bn), 1);
+            basisParts{end+1} = sprintf('%s 0\n%s\n****', strjoin(elems, ' '), bn); %#ok<AGROW>
+            if isLikelyEcpBasisName(bn)
+                ecpParts{end+1} = sprintf('%s 0\n%s', strjoin(elems, ' '), bn); %#ok<AGROW>
+            end
+        end
+
+        downloadRows = rows(strcmp(sources, 'Download (BSE)'), :);
+        downloadNames = strtrim(downloadRows(:,2));
+        uniqueNames = unique(downloadNames, 'stable');
+        for k = 1:numel(uniqueNames)
+            bn = uniqueNames{k};
+            elems = downloadRows(strcmp(downloadNames, bn), 1);
             [sec, errMsg] = fetchBseBlock(bn, elems);
             if ~isempty(errMsg)
                 basisBlock = '';
@@ -1588,11 +1641,27 @@ updateBondsTable();
             if ~isempty(bPart), basisParts{end+1} = bPart; end %#ok<AGROW>
             if ~isempty(ePart), ecpParts{end+1}   = ePart; end %#ok<AGROW>
         end
+
         basisBlock = strjoin(basisParts, newline);
         if ~isempty(ecpParts)
             basisBlock = sprintf('%s\n\n%s', basisBlock, strjoin(ecpParts, newline));
             genKeyword = 'genecp';
         end
+    end
+
+% -------------------------------------------------------------------------
+    function tf = isLikelyEcpBasisName(name)
+    % Recognizes Gaussian's own built-in ECP-bearing basis set families by
+    % name prefix (case-insensitive), so BUILDCOMPACTBASISBLOCK knows
+    % which groups also need an ECP section. Not exhaustive (e.g. the
+    % element-dependent Def2 family is deliberately left out -- light
+    % elements in Def2 bases are all-electron, only the heavy ones use an
+    % ECP, so a simple name match can't decide it); users needing a basis
+    % outside this list should use "Download full data" instead, which
+    % gets the ECP presence right unconditionally from Basis Set Exchange.
+        roots = {'LANL2DZ', 'LANL2TZ', 'LANL08', 'SDD', 'CEP-4G', 'CEP-31G', 'CEP-121G', 'SHC'};
+        upperName = upper(strtrim(name));
+        tf = any(cellfun(@(r) startsWith(upperName, r), roots));
     end
 
 % -------------------------------------------------------------------------
@@ -1604,13 +1673,24 @@ updateBondsTable();
     % such token is touched (route lines with more than one '/' are
     % unusual; if that ever matters, the user can still edit the Route
     % field by hand -- it is updated in place with the result, not hidden).
+    % Whether a token was actually found is checked directly with REGEXP
+    % rather than by comparing NEWROUTE to ROUTE: on a second (or later)
+    % "Generate" in the same session, ROUTE already reads '.../gen' or
+    % '.../genecp' from the previous call, so if GENKEYWORD happens not to
+    % change (e.g. still "gen" because the newly chosen basis still has
+    % no ECP), the substitution legitimately reproduces the same string --
+    % a string-equality check would misread that as "no token found" and
+    % raise a false error (confirmed to reproduce exactly the reported
+    % "works once, then errors on the next save" symptom).
         errMsg = '';
-        newRoute = regexprep(route, '(\S+)/\S+', ['$1/' genKeyword], 'once');
-        if strcmp(newRoute, route)
+        newRoute = route;
+        if isempty(regexp(route, '\S+/\S+', 'once'))
             errMsg = sprintf(['Could not find a "method/basis" token (e.g. "b3lyp/6-31g(d)") in the ', ...
                 'Route field to replace with "%s". Edit Route to include one, or uncheck ', ...
                 '"Use custom per-element basis".'], genKeyword);
+            return
         end
+        newRoute = regexprep(route, '(\S+)/\S+', ['$1/' genKeyword], 'once');
     end
 
 % -------------------------------------------------------------------------
@@ -1627,7 +1707,7 @@ updateBondsTable();
         if nprocField.Value > 0,              nvArgs = [nvArgs, {'Nproc', nprocField.Value}];      end
 
         if useCustomBasisCheck.Value
-            statusLabel.Text = 'Downloading basis set(s) from Basis Set Exchange...';
+            statusLabel.Text = 'Preparing custom basis set(s)...';
             drawnow;
             [basisBlock, genKeyword, errMsg] = buildCustomBasisBlock();
             if ~isempty(errMsg)
