@@ -170,6 +170,16 @@ function G_molecule_builder()
 %       result -- Route is updated in place so what gets written is
 %       always visible. A download/name error is shown via UIALERT
 %       rather than silently falling back.
+%     - Charge/multiplicity check: on "Generate Gaussian input...", if
+%       Charge/Mult. describe an electron count that cannot actually have
+%       that multiplicity (total electrons = sum of atomic numbers minus
+%       charge must share multiplicity-1's parity -- e.g. an odd electron
+%       count can never be a singlet), a dialog offers the lowest valid
+%       multiplicity for the current charge (1 or 2) instead of silently
+%       generating an input Gaussian would reject.
+%     - "Comments" tab (Gaussian Job): free-form notes, written as '!'
+%       lines at the very end of the generated .gjf (ignored by Gaussian
+%       itself; kept with the file as documentation only).
 %
 %   See also G16_DRAW_MOLECULE, G_ELEMENT_TABLE, G_WRITE_GJF,
 %            G_READ_INPUT, G16_GET_BOND_LENGTH, G_ROUGH_OPTIMIZE_GEOMETRY,
@@ -218,6 +228,24 @@ bseBlockCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
 bseBlockCacheFile = fullfile(fileparts(mfilename('fullpath')), 'bse_basis_blocks.mat');
 
 [cpkColorsTbl, covRadiiTbl] = G_element_table(); %#ok<ASGLU> -- cpkColorsTbl unused here, kept for symmetry/future use
+
+% Element symbol, indexed by atomic number -- shared by FETCHBSEELEMENTBASISDB
+% (mapping a Basis Set Exchange element number back to a symbol) and
+% ATOMICNUMBEROF (the reverse lookup, used by CHARGEMULTWARNING to total a
+% molecule's electron count).
+ptSymbols = { ...
+    'H','He','Li','Be','B','C','N','O','F','Ne', ...
+    'Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca', ...
+    'Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn', ...
+    'Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr', ...
+    'Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn', ...
+    'Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd', ...
+    'Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb', ...
+    'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg', ...
+    'Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th', ...
+    'Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm', ...
+    'Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt','Ds', ...
+    'Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'};
 
 % -------------------------------------------------------------------------
 % Find the active monitor, then build the window in a single atomic call
@@ -290,8 +318,9 @@ moveModeCheck = uicheckbox(sidebar, 'Position', [10 680 sidebarW-30 22], ...
     'Value', false, 'ValueChangedFcn', @(s,e) redraw());
 
 tg = uitabgroup(sidebar, 'Position', [5 10 sidebarW-10 665]);
-tabBuild = uitab(tg, 'Title', 'Atoms & Bonds');
-tabJob   = uitab(tg, 'Title', 'Gaussian Job');
+tabBuild    = uitab(tg, 'Title', 'Atoms & Bonds');
+tabJob      = uitab(tg, 'Title', 'Gaussian Job');
+tabComments = uitab(tg, 'Title', 'Comments');
 
 % ---- "Atoms & Bonds" tab -------------------------------------------------
 uilabel(tabBuild, 'Position', [5 602 150 18], 'Text', 'Atoms:', 'FontWeight', 'bold');
@@ -404,6 +433,12 @@ dbStatusLabel = uilabel(tabJob, 'Position', [210 85 sidebarW-245 24], ...
 uibutton(tabJob, 'push', 'Position', [5 35 sidebarW-40 36], ...
     'Text', 'Generate Gaussian input...', 'FontWeight', 'bold', ...
     'ButtonPushedFcn', @(s,e) onGenerateInput());
+
+% ---- "Comments" tab -------------------------------------------------------
+uilabel(tabComments, 'Position', [5 600 sidebarW-40 40], 'WordWrap', 'on', ...
+    'Text', ['Appended to the end of the generated .gjf, each line prefixed with ''!'' ', ...
+        '(a Gaussian comment -- ignored by Gaussian itself, just notes kept with the file).']);
+commentsField = uitextarea(tabComments, 'Position', [5 10 sidebarW-40 585], 'Value', {''});
 
 updateAtomsTable();
 updateBondsTable();
@@ -1437,20 +1472,8 @@ updateBondsTable();
     % struct field (confirmed directly against the live API) -- applying
     % that same transform here is what makes ENTRY.VERSIONS.(verField)
     % resolve correctly instead of guessing.
-        ptSymbols = { ...
-            'H','He','Li','Be','B','C','N','O','F','Ne', ...
-            'Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca', ...
-            'Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn', ...
-            'Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr', ...
-            'Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn', ...
-            'Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd', ...
-            'Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb', ...
-            'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg', ...
-            'Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th', ...
-            'Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm', ...
-            'Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt','Ds', ...
-            'Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'};
-
+        % PTSYMBOLS is the outer function's own shared table (see its
+        % declaration near G_ELEMENT_TABLE for why it is shared).
         raw = webread('https://www.basissetexchange.org/api/metadata/', weboptions('Timeout', 30));
         fn = fieldnames(raw);
         db = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -1839,9 +1862,62 @@ updateBondsTable();
     end
 
 % -------------------------------------------------------------------------
+    function z = atomicNumberOf(sym)
+    % Atomic number of SYM via PTSYMBOLS (case-insensitive), or NaN for a
+    % symbol not in that table (e.g. a typo'd "Other..." custom symbol) --
+    % CHARGEMULTOK's caller treats NaN as "cannot check", not an error.
+        idx = find(strcmpi(ptSymbols, sym), 1);
+        if isempty(idx)
+            z = NaN;
+        else
+            z = idx;
+        end
+    end
+
+% -------------------------------------------------------------------------
+    function ok = confirmChargeMult()
+    % Checks that CHARGEFIELD/MULTFIELD describe a physically possible
+    % electron configuration for the current molecule, and offers to fix
+    % it if not -- same reasoning a chemist applies by hand: total
+    % electrons = sum(atomic numbers) - charge must have the same parity
+    % as multiplicity-1 (an odd electron count can never be a singlet,
+    % an even one can never be a doublet, etc.); the lowest multiplicity
+    % consistent with a given parity is 1 (even electrons) or 2 (odd).
+    % Returns true to proceed with generating (either already consistent,
+    % the user accepted the suggested fix, or chose to proceed anyway),
+    % false to abort (user cancelled). Silently returns true (does not
+    % check) if any atom's symbol is not in PTSYMBOLS, since the electron
+    % count would then be meaningless.
+        ok = true;
+        Zs = cellfun(@atomicNumberOf, symbols);
+        if any(isnan(Zs))
+            return
+        end
+        nElectrons = sum(Zs) - chargeField.Value;
+        suggestedMult = mod(nElectrons, 2) + 1; % odd electrons -> 2, even -> 1
+        if mod(nElectrons - (multField.Value - 1), 2) == 0
+            return % already consistent with the chosen multiplicity
+        end
+        sel = uiconfirm(fig, sprintf(['With charge %d, this molecule has %d electrons, which cannot give ', ...
+            'multiplicity %d (minimum/lowest valid multiplicity for %d electrons is %d). Use %d instead?'], ...
+            chargeField.Value, nElectrons, multField.Value, nElectrons, suggestedMult, suggestedMult), ...
+            'Charge/multiplicity check', 'Options', {sprintf('Use %d', suggestedMult), 'Keep as is', 'Cancel'}, ...
+            'DefaultOption', 1, 'CancelOption', 3, 'Icon', 'warning');
+        switch sel
+            case sprintf('Use %d', suggestedMult)
+                multField.Value = suggestedMult;
+            case 'Cancel'
+                ok = false;
+        end
+    end
+
+% -------------------------------------------------------------------------
     function onGenerateInput()
         if isempty(symbols)
             uialert(fig, 'Add at least one atom first.', 'Nothing to export');
+            return
+        end
+        if ~confirmChargeMult()
             return
         end
 
@@ -1850,6 +1926,9 @@ updateBondsTable();
         if ~isempty(strtrim(chkField.Value)), nvArgs = [nvArgs, {'Chk', strtrim(chkField.Value)}]; end
         if ~isempty(strtrim(memField.Value)), nvArgs = [nvArgs, {'Mem', strtrim(memField.Value)}]; end
         if nprocField.Value > 0,              nvArgs = [nvArgs, {'Nproc', nprocField.Value}];      end
+        if ~all(cellfun(@(l) isempty(strtrim(l)), commentsField.Value))
+            nvArgs = [nvArgs, {'Comments', commentsField.Value}];
+        end
 
         if useCustomBasisCheck.Value
             statusLabel.Text = 'Preparing custom basis set(s)...';

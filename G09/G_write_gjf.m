@@ -33,6 +33,13 @@ function G_write_gjf(outFile, symbols, xyz, route, charge, mult, varargin)
 %                      shape (basis functions per element, each ending in
 %                      '****', then -- only if any element needs one -- a
 %                      blank line followed by its ECP data).
+%       'Comments'   - char or cellstr, free-form notes written as the
+%                      very last thing in the file, each line prefixed
+%                      with '! ' (a Gaussian comment marker, so they are
+%                      never mistaken for additional input and are simply
+%                      ignored by Gaussian itself) -- for documentation
+%                      kept alongside the file, not read by Gaussian
+%                      (default: '', nothing written).
 %
 %   The Gaussian input-file format does not differ between Gaussian 09 and
 %   Gaussian 16, so (like G_READ_INPUT/G_SPECTRA_NM) this is a single
@@ -72,6 +79,7 @@ function G_write_gjf(outFile, symbols, xyz, route, charge, mult, varargin)
     addParameter(p, 'Mem',   '', @ischar);
     addParameter(p, 'Nproc', 0,  @isnumeric);
     addParameter(p, 'BasisBlock', '', @ischar);
+    addParameter(p, 'Comments', '', @(x) ischar(x) || iscellstr(x) || isstring(x));
     parse(p, outFile, symbols, xyz, route, charge, mult, varargin{:});
 
     symbols = cellstr(symbols(:));
@@ -112,6 +120,14 @@ function G_write_gjf(outFile, symbols, xyz, route, charge, mult, varargin)
 
     if ~isempty(p.Results.BasisBlock)
         fprintf(fid, '%s\n\n', strtrim(p.Results.BasisBlock));
+    end
+
+    comments = cellstr(p.Results.Comments);
+    comments = comments(~cellfun(@(l) isempty(strtrim(l)), comments));
+    if ~isempty(comments)
+        for i = 1:numel(comments)
+            fprintf(fid, '! %s\n', comments{i});
+        end
     end
 
     fclose(fid);
