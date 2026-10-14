@@ -506,6 +506,13 @@ updateBondsTable();
 
 % -------------------------------------------------------------------------
     function redraw()
+        % Captured before CLEARAX/G16_DRAW_MOLECULE and restored below:
+        % G16_DRAW_MOLECULE calls VIEW(AX,3) unconditionally on every
+        % call, snapping back to the default orientation -- confirmed to
+        % reproduce the reported bug exactly (rotate the view by hand,
+        % then toggle "Move atoms", which calls REDRAW without changing
+        % the molecule at all -- the hand-set rotation was lost anyway).
+        [azPrev, elPrev] = view(ax);
         clearAx();
         if isempty(symbols)
             return
@@ -541,6 +548,7 @@ updateBondsTable();
         ax.Visible = 'on';
         ax.Box = 'on';
         ax.XGrid = 'off'; ax.YGrid = 'off'; ax.ZGrid = 'off';
+        view(ax, azPrev, elPrev);
         if selAtomIdx >= 1 && selAtomIdx <= numel(symbols)
             hold(ax, 'on');
             plot3(ax, xyz(selAtomIdx,1), xyz(selAtomIdx,2), xyz(selAtomIdx,3), 'o', ...
