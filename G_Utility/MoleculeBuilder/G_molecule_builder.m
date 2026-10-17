@@ -169,7 +169,13 @@ function G_molecule_builder()
 %       ECP data) and G_WRITE_GJF's 'BasisBlock' carries the combined
 %       result -- Route is updated in place so what gets written is
 %       always visible. A download/name error is shown via UIALERT
-%       rather than silently falling back.
+%       rather than silently falling back. Whenever at least one row
+%       actually downloaded data from Basis Set Exchange, its required
+%       citation (Pritchard et al., J. Chem. Inf. Model. 2019, 59(11),
+%       4814-4820, doi:10.1021/acs.jcim.9b00725) is appended to the
+%       generated .gjf automatically, as further '!' comment lines after
+%       any text typed in the "Comments" tab -- never added for
+%       "Name only" rows, which never touch Basis Set Exchange.
 %     - Charge/multiplicity check: on "Generate Gaussian input...", if
 %       Charge/Mult. describe an electron count that cannot actually have
 %       that multiplicity (total electrons = sum of atomic numbers minus
@@ -1765,8 +1771,10 @@ updateBondsTable();
     % (concatenated with no blank line between them), then -- only if at
     % least one group had ECP data -- a single blank line, then ALL ECP
     % sections concatenated the same way. GENKEYWORD is 'genecp' in that
-    % case, 'gen' otherwise, for the caller to splice into ROUTE.
-        basisBlock = ''; genKeyword = 'gen'; errMsg = '';
+    % case, 'gen' otherwise, for the caller to splice into ROUTE. USEDBSE
+    % is true if at least one row was actually fetched from Basis Set
+    % Exchange, so the caller knows to append its citation.
+        basisBlock = ''; genKeyword = 'gen'; errMsg = ''; usedBse = false; %#ok<NASGU> -- default for early-return paths
         refreshBasisTable();
         rows = basisTable.Data;
         if isempty(rows)
@@ -1796,6 +1804,7 @@ updateBondsTable();
         end
 
         downloadRows = rows(strcmp(sources, 'Download (BSE)'), :);
+        usedBse = ~isempty(downloadRows); %#ok<NASGU> -- the actual value returned to the caller
         downloadNames = strtrim(downloadRows(:,2));
         uniqueNames = unique(downloadNames, 'stable');
         for k = 1:numel(uniqueNames)
@@ -1815,6 +1824,24 @@ updateBondsTable();
             basisBlock = sprintf('%s\n\n%s', basisBlock, strjoin(ecpParts, newline));
             genKeyword = 'genecp';
         end
+    end
+
+% -------------------------------------------------------------------------
+    function lines = bseCitationLines()
+    % Required citation text for Basis Set Exchange, appended (via the
+    % Comments mechanism) to any .gjf that actually downloaded basis/ECP
+    % data from it -- per basissetexchange.org's own request, not
+    % optional attribution. Only triggered by BUILDCUSTOMBASISBLOCK's
+    % USEDBSE flag, i.e. never for "Name only" (compact, no-download)
+    % rows, which reuse Gaussian's own built-in library and didn't touch
+    % Basis Set Exchange at all.
+        lines = { ...
+            'Basis set data for this job was obtained from the Basis Set Exchange.'
+            'When publishing results obtained using these basis sets, please cite:'
+            'A New Basis Set Exchange: An Open, Up-to-date Resource for the Molecular'
+            'Sciences Community. Benjamin P. Pritchard, Doaa Altarawy, Brett Didier,'
+            'Tara D. Gibson, Theresa L. Windus. J. Chem. Inf. Model. 2019, 59(11),'
+            '4814-4820, doi:10.1021/acs.jcim.9b00725.'};
     end
 
 % -------------------------------------------------------------------------
@@ -1926,14 +1953,14 @@ updateBondsTable();
         if ~isempty(strtrim(chkField.Value)), nvArgs = [nvArgs, {'Chk', strtrim(chkField.Value)}]; end
         if ~isempty(strtrim(memField.Value)), nvArgs = [nvArgs, {'Mem', strtrim(memField.Value)}]; end
         if nprocField.Value > 0,              nvArgs = [nvArgs, {'Nproc', nprocField.Value}];      end
-        if ~all(cellfun(@(l) isempty(strtrim(l)), commentsField.Value))
-            nvArgs = [nvArgs, {'Comments', commentsField.Value}];
-        end
+
+        comments = commentsField.Value(:);
+        comments = comments(~cellfun(@(l) isempty(strtrim(l)), comments));
 
         if useCustomBasisCheck.Value
             statusLabel.Text = 'Preparing custom basis set(s)...';
             drawnow;
-            [basisBlock, genKeyword, errMsg] = buildCustomBasisBlock();
+            [basisBlock, genKeyword, errMsg, usedBse] = buildCustomBasisBlock();
             if ~isempty(errMsg)
                 uialert(fig, errMsg, 'Basis Set Exchange error');
                 statusLabel.Text = 'Basis set download failed (see error).';
@@ -1948,6 +1975,14 @@ updateBondsTable();
             route = newRoute;
             routeField.Value = newRoute; % keep the UI showing what will actually be written
             nvArgs = [nvArgs, {'BasisBlock', basisBlock}];
+            if usedBse
+                if ~isempty(comments), comments = [comments; {''}]; end
+                comments = [comments; bseCitationLines()];
+            end
+        end
+
+        if ~isempty(comments)
+            nvArgs = [nvArgs, {'Comments', comments}];
         end
 
         [f, p] = pickSaveFile({'*.gjf', 'Gaussian input (*.gjf)'}, 'Save Gaussian input as', 'molecule.gjf');
