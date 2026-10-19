@@ -6,7 +6,13 @@ function G16_draw_mode(mol, nm, mode_idx, varargin)
 %
 %   Input:
 %       mol       - struct returned by G16_structure (geometry)
-%       nm        - struct returned by G16_nmodes (displacement vectors)
+%       nm        - struct returned by G16_nmodes (displacement vectors).
+%                   nm.Natoms may be less than mol.Natoms for a
+%                   partial-Hessian vibrational analysis (e.g. an
+%                   adsorbate on a frozen cluster/surface) -- nm.atomIdx
+%                   is used to place each displacement arrow on the
+%                   correct atom; the rest of MOL is still drawn, just
+%                   with no arrow.
 %       mode_idx  - mode index (1-based, indexing into nm.freq)
 %
 %   Optional parameters:
@@ -65,8 +71,19 @@ ax          = p.Results.Ax;
 if mode_idx < 1 || mode_idx > nm.Nmodes
     error('G16_draw_mode: mode index %d is out of range [1, %d]', mode_idx, nm.Nmodes);
 end
-if mol.Natoms ~= nm.Natoms
-    error('G16_draw_mode: mol.Natoms (%d) does not match nm.Natoms (%d)', mol.Natoms, nm.Natoms);
+% NM.ATOMIDX maps each NM.DISP row to its atom index in MOL (normally
+% just 1:NM.Natoms, but a proper subset of 1:MOL.Natoms for a
+% partial-Hessian vibrational analysis -- see G16_NMODES). Older/foreign
+% NM structs without the field fall back to the historical assumption
+% that the two atom counts are equal and in the same order.
+if isfield(nm, 'atomIdx') && ~isempty(nm.atomIdx)
+    atomIdx = nm.atomIdx(:);
+else
+    atomIdx = (1:nm.Natoms)';
+end
+if max(atomIdx) > mol.Natoms || min(atomIdx) < 1
+    error('G16_draw_mode: nm''s atom indices (up to %d) do not fit mol.Natoms (%d) -- mismatched files?', ...
+        max(atomIdx), mol.Natoms);
 end
 
 % -------------------------------------------------------------------------
@@ -111,16 +128,17 @@ end
 thresh = 0.05;
 hold(ax, 'on');
 
-for i = 1:mol.Natoms
-    if norms_i(i) / max_norm < thresh
+for j = 1:nm.Natoms
+    if norms_i(j) / max_norm < thresh
         continue
     end
+    i = atomIdx(j);   % MOL's row for this NM.DISP row (see ATOMIDX above)
     x0 = mol.xyz(i,1);
     y0 = mol.xyz(i,2);
     z0 = mol.xyz(i,3);
-    dx = U_scaled(i,1);
-    dy = U_scaled(i,2);
-    dz = U_scaled(i,3);
+    dx = U_scaled(j,1);
+    dy = U_scaled(j,2);
+    dz = U_scaled(j,3);
 
     draw_arrow3(ax, x0, y0, z0, dx, dy, dz, arrow_color);
 end

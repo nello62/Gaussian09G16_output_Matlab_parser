@@ -4,7 +4,11 @@ function outfile = G16_animate_mode(mol, nm, mode_idx, varargin)
 %   G16_ANIMATE_MODE(mol, nm, mode_idx) oscillates the molecule along the
 %   mode's displacement vector (equilibrium +/- amplitude, like GaussView's
 %   mode animations) and saves the result as an MP4 video (VideoWriter,
-%   MPEG-4 profile).
+%   MPEG-4 profile). nm.Natoms may be less than mol.Natoms for a
+%   partial-Hessian vibrational analysis (e.g. an adsorbate on a frozen
+%   cluster/surface) -- nm.atomIdx is used to apply each atom's
+%   displacement at the right place; atoms with no displacement row
+%   (frozen out of the Hessian) simply stay fixed throughout the animation.
 %
 %   OUTFILE = G16_ANIMATE_MODE(...) returns the path written to.
 %
@@ -104,9 +108,20 @@ if mode_idx < 1 || mode_idx > nm.Nmodes
     error('G16_animate_mode:badIndex', ...
         'mode index %d is out of range [1, %d].', mode_idx, nm.Nmodes);
 end
-if mol.Natoms ~= nm.Natoms
+% NM.ATOMIDX maps each NM.DISP row to its atom index in MOL (normally
+% just 1:NM.Natoms, but a proper subset of 1:MOL.Natoms for a
+% partial-Hessian vibrational analysis -- see G16_NMODES). Older/foreign
+% NM structs without the field fall back to the historical assumption
+% that the two atom counts are equal and in the same order.
+if isfield(nm, 'atomIdx') && ~isempty(nm.atomIdx)
+    atomIdx = nm.atomIdx(:);
+else
+    atomIdx = (1:nm.Natoms)';
+end
+if max(atomIdx) > mol.Natoms || min(atomIdx) < 1
     error('G16_animate_mode:sizeMismatch', ...
-        'mol.Natoms (%d) does not match nm.Natoms (%d).', mol.Natoms, nm.Natoms);
+        'nm''s atom indices (up to %d) do not fit mol.Natoms (%d) -- mismatched files?', ...
+        max(atomIdx), mol.Natoms);
 end
 
 % -------------------------------------------------------------------------
@@ -140,13 +155,20 @@ if max_norm == 0
 end
 U_scaled = U / max_norm * scale;
 
+% Expand to MOL's full atom count (zero displacement for any atom with no
+% NM.DISP row at all, e.g. frozen out of a partial-Hessian analysis -- see
+% ATOMIDX above), so every use of a per-atom displacement below can just
+% index by MOL's own atom numbering.
+Ufull = zeros(mol.Natoms, 3);
+Ufull(atomIdx, :) = U_scaled;
+
 % -------------------------------------------------------------------------
 % Fixed axis limits across the whole oscillation, so the camera/box does
 % not jitter frame to frame (G16_draw_molecule's own 'axis tight' would
 % otherwise re-fit to each frame's instantaneous, slightly different extent)
 % -------------------------------------------------------------------------
 pad = 1.0;   % Angstrom, roughly one atom radius, so spheres are not clipped
-extreme_pts = [mol.xyz - abs(U_scaled); mol.xyz + abs(U_scaled)];
+extreme_pts = [mol.xyz - abs(Ufull); mol.xyz + abs(Ufull)];
 xlim_fixed = [min(extreme_pts(:,1))-pad, max(extreme_pts(:,1))+pad];
 ylim_fixed = [min(extreme_pts(:,2))-pad, max(extreme_pts(:,2))+pad];
 zlim_fixed = [min(extreme_pts(:,3))-pad, max(extreme_pts(:,3))+pad];
@@ -198,7 +220,7 @@ cleaner = onCleanup(@() close(fig));   % ensures the figure closes even on error
     % counts kept growing frame to frame even immediately after cla),
     % causing the video to show all frames superimposed instead of one at
     % a time. Deleting and recreating the axes is the reliable fix.
-        mol_frame.xyz = mol.xyz + phase * U_scaled;
+        mol_frame.xyz = mol.xyz + phase * Ufull;
         delete(ax);
         ax = axes('Parent', fig);
         G16_draw_molecule(mol_frame, 'Ax', ax, 'AtomScale', atom_scale, ...

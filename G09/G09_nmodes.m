@@ -17,6 +17,17 @@ function nm = G09_nmodes(filename, varargin)
 %       .disp       [Natoms x 3 x Nmodes] displacement vectors
 %       .Nmodes     int
 %       .Natoms     int
+%       .atomIdx    [Natoms x 1] 1-based index of each DISP row into the
+%                   FULL structure (G09_STRUCTURE's own numbering, i.e.
+%                   mol.xyz's row index) -- normally just (1:Natoms)', but
+%                   a proper subset for a partial-Hessian vibrational
+%                   analysis (e.g. an adsorbate on a cluster/surface
+%                   frozen, via "-1", during a preceding Opt): atoms
+%                   excluded from the Hessian are simply absent from this
+%                   section, so .Natoms < mol.Natoms and .atomIdx records
+%                   which atoms the .disp rows actually belong to.
+%                   G09_DRAW_MODE/G09_ANIMATE_MODE use it directly, so
+%                   this case needs no special handling by the caller.
 %       .has_Raman  logical
 %       .filename   char
 %       .RamanFr        [Nmodes x K] per-incident-light-frequency Raman
@@ -74,6 +85,7 @@ frcconst = [];
 symmetry = {};
 disp_all = [];
 Natoms_det = 0;
+atomIdx_det = [];   % global 1-based atom index of each DISP_ALL row (see below)
 RamanFrAccum  = {};   % RamanFrAccum{n} = accumulated column for incident freq index n
 IncidentLight = [];   % [1 x K] cm-1, parsed once from the section header
 
@@ -144,17 +156,27 @@ while k <= N
 
         k = k+1;
         atom_disp = [];
+        atom_idx_block = [];
         while k <= N
             ln2 = lines{k};
             tok2 = sscanf(ln2, '%f');
             if numel(tok2) < 2 + 3*ncols, break; end
+            % tok2 = [iatom, AN, dx1,dy1,dz1, ...]; IATOM is this atom's
+            % 1-based index into the FULL structure (not just this
+            % block's row count) -- see G16_NMODES's matching comment for
+            % why these can differ (partial-Hessian vibrational analysis
+            % after a frozen-atom Opt).
             atom_disp(end+1, :) = tok2(3 : 2+3*ncols)'; %#ok<AGROW>
+            atom_idx_block(end+1) = tok2(1); %#ok<AGROW>
             k = k+1;
         end
         if isempty(atom_disp), continue; end
 
         Nat = size(atom_disp, 1);
-        if Natoms_det == 0, Natoms_det = Nat; end
+        if Natoms_det == 0
+            Natoms_det = Nat;
+            atomIdx_det = atom_idx_block(:);
+        end
 
         for ci = 1:ncols
             col_xyz  = atom_disp(:, (ci-1)*3+1 : ci*3);
@@ -219,13 +241,19 @@ nm.symmetry  = symmetry;
 nm.disp      = disp_all;
 nm.Nmodes    = Nmodes;
 nm.Natoms    = Natoms_det;
+nm.atomIdx   = atomIdx_det;
 nm.has_Raman = has_Raman;
 nm.filename  = filename;
 nm.RamanFr       = RamanFr;
 nm.IncidentLight = IncidentLight;
 nm.has_RamanFr   = has_RamanFr;
 
-fprintf('G09_nmodes: %d modes, %d atoms — %s\n', Nmodes, Natoms_det, filename);
+if ~isequal(atomIdx_det, (1:Natoms_det)')
+    fprintf(['G09_nmodes: %d modes, %d atoms — %s (partial-Hessian: atoms ', ...
+        '%s of the full structure)\n'], Nmodes, Natoms_det, filename, mat2str(atomIdx_det'));
+else
+    fprintf('G09_nmodes: %d modes, %d atoms — %s\n', Nmodes, Natoms_det, filename);
+end
 
 end  % G09_nmodes
 
