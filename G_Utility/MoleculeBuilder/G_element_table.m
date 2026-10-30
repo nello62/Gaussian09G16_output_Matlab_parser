@@ -8,9 +8,11 @@ function [cpkColors, covRadii] = G_element_table()
 %                    Trans. 2008)
 %
 %   The Gaussian input-file format does not differ between Gaussian 09 and
-%   Gaussian 16, so (like G_READ_INPUT/G_SPECTRA_NM) this is a single
-%   shared function rather than separate G09_/G16_ versions -- an
-%   identical copy is kept in both the G09/ and G16/ folders.
+%   Gaussian 16, so (like G_READ_INPUT/G_SPECTRA_NM) this did not need
+%   separate G09_/G16_ versions; unlike those two, it has no caller
+%   outside G_MOLECULE_BUILDER (see below), so it lives alongside it in
+%   G_Utility/MoleculeBuilder/ as a single copy, rather than duplicated
+%   into G09/ and G16/.
 %
 %   Consolidates the two previously-independent, differently-sized
 %   element tables embedded in G16_GET_BOND_LENGTH (26 elements, radii
