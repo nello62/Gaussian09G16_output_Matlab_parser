@@ -2586,6 +2586,82 @@ structural analysis, not as the "official" G09/G16 connectivity.
 \end{tbnote}
 
 % -----------------------------------------------------------------------------
+\subsection{G09\_get\_angle / G16\_get\_angle}
+
+\begin{lstlisting}
+[angTable, ang] = G09_get_angle(mol, atoms)
+[angTable, ang] = G09_get_angle(mol, atoms, 'Name', Value, ...)
+\end{lstlisting}
+
+Bond angles $i$-$j$-$k$ (degrees) from a molecular structure. \code{mol} is
+a struct with fields \code{.xyz} ($N\times3$, \AA) and, optionally,
+\code{.symbols} (as returned by \code{G09\_structure}/\code{G16\_structure},
+\code{G09\_fchk\_read}/\code{G16\_fchk\_read}, or \code{G\_read\_input}), or
+simply an $N\times3$ coordinate matrix. \code{atoms} is an $M\times3$
+matrix of 1-based atom indices (Gaussian numbering); row $m$ defines the
+angle \code{atoms(m,1)-atoms(m,2)-atoms(m,3)}, with the vertex in the
+middle. The angle is computed as $\mathrm{atan2}(|u\times v|,\,u\cdot v)$
+with $u=r_1-r_2$, $v=r_3-r_2$, which stays accurate near 0\textdegree{}
+and 180\textdegree{} (where \code{acos} loses precision).
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'SaveAs'}  & \code{''}    & Path (\code{.xlsx} or \code{.csv}) to save the table to; not saved if omitted \\
+\code{'Verbose'} & \code{false} & Print the table \\
+\end{argtable}
+
+Output columns: \code{Atom1}, \code{Sym1}, \code{Atom2}, \code{Sym2},
+\code{Atom3}, \code{Sym3}, \code{Angle\_deg} (symbols are \code{''} if
+\code{mol} has no \code{.symbols}).
+
+\begin{lstlisting}
+mol = G16_structure('trans_optfreq.log');
+G16_get_angle(mol, [4 7 8], 'Verbose', true)   % C4-N7=N8
+T = G16_get_angle(mol, [4 7 8; 7 8 9]);        % both CNN angles
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{G09\_get\_dihedral / G16\_get\_dihedral}
+
+\begin{lstlisting}
+[dihTable, phi] = G09_get_dihedral(mol, atoms)
+[dihTable, phi] = G09_get_dihedral(mol, atoms, 'Name', Value, ...)
+\end{lstlisting}
+
+Dihedral (torsion) angles $i$-$j$-$k$-$l$ (degrees) from a molecular
+structure. \code{atoms} is an $M\times4$ matrix of 1-based atom indices;
+row $m$ defines the dihedral \code{atoms(m,1)-(m,2)-(m,3)-(m,4)}, i.e.\
+the angle between the planes $(1,2,3)$ and $(2,3,4)$ seen along the
+central bond $2$--$3$. With $b_1=r_2-r_1$, $b_2=r_3-r_2$, $b_3=r_4-r_3$,
+and plane normals $n_1=b_1\times b_2$, $n_2=b_2\times b_3$:
+\[
+\phi = \mathrm{atan2}\!\left(\,(n_1\times n_2)\cdot \tfrac{b_2}{|b_2|},\;\; n_1\cdot n_2\right).
+\]
+The dihedral is undefined (\code{NaN}, with a warning) if three
+consecutive atoms are collinear (e.g.\ at a linear CNN angle).
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Signed'}  & \code{true}  & \code{true}: signed dihedral in $(-180,180]$, IUPAC convention (positive = clockwise rotation of the front bond 1-2 onto the back bond 3-4 seen along $2\to3$); \code{false}: absolute value in $[0,180]$ \\
+\code{'SaveAs'}  & \code{''}    & Path (\code{.xlsx} or \code{.csv}) to save the table to; not saved if omitted \\
+\code{'Verbose'} & \code{false} & Print the table \\
+\end{argtable}
+
+Output columns: \code{Atom1}, \code{Sym1}, \ldots, \code{Atom4},
+\code{Sym4}, \code{Dihedral\_deg}.
+
+\begin{lstlisting}
+mol = G16_structure('cis_optfreq.log');
+G16_get_dihedral(mol, [4 7 8 9], 'Verbose', true)       % CNNC
+[~, phi] = G16_get_dihedral(mol, [4 7 8 9], 'Signed', false);
+\end{lstlisting}
+
+\begin{tbnote}
+Both functions are version-agnostic like \code{G\_read\_input}/\code{G\_spectra\_nm}
+(identical G09/G16 copies), but keep the \code{G09\_}/\code{G16\_} naming
+convention of the rest of the toolbox rather than a shared \code{G\_}
+helper, matching \code{get\_bond\_length}/\code{draw\_molecule} just above.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
 \subsection{G09\_nbo\_bonds / G16\_nbo\_bonds}
 \label{sec:nbo-bonds-ref}
 
@@ -3047,6 +3123,8 @@ the file exactly once.
 \code{g16\_route}             & Route section string \\
 \code{g16\_available\_data}   & Lists which toolbox quantities are expected to be extractable from a file, by checking its route keywords (e.g.\ ``no \code{freq} keyword $\to$ no nmodes/spectra/thermochemistry'') --- catches this before an error or a NaN \\
 \code{g16\_get\_\discretionary{}{}{}bond\_\discretionary{}{}{}length} & Bond-length table (pandas DataFrame) from covalent radii \\
+\code{g16\_get\_angle}        & Bond angle $i$-$j$-$k$ (degrees) table from a molecular structure \\
+\code{g16\_get\_dihedral}     & Dihedral (torsion) angle $i$-$j$-$k$-$l$ (degrees) table from a molecular structure \\
 \code{g16\_nbo\_bonds}        & Bond order (single/double/triple) from an actual Gaussian NBO analysis (\code{pop=nbo}), by counting bonding (BD) natural bond orbitals per atom pair \\
 \code{g16\_fchk\_read}        & Reads a Gaussian formatted checkpoint (\code{.fchk}) file --- works on both G09 and G16 \code{.fchk} files, since the format does not depend on the Gaussian version \\
 \code{g16\_charges\_fchk}     & Visualises charges from a \code{g16\_fchk\_read} struct, without needing the corresponding \code{.log}/\code{.out} file \\
@@ -3104,6 +3182,8 @@ g16_mode_viewer(filename, scale=1.5, atom_scale=0.35, bond_tol=1.30,
                 font_size=10, **extra_opts)
 g16_get_bond_length(mol, tolerance=1.15, include_h=True,
                     sort_by="distance", save_as="")
+g16_get_angle(mol, atoms, save_as="", verbose=False)
+g16_get_dihedral(mol, atoms, signed=True, save_as="", verbose=False)
 g16_nbo_bonds(filename, section="last", lines=None)
 g16_fchk_read(filename, verbose=True)
 g16_charges_fchk(mol, ch, mode="atom", plot=True, atom_scale=0.35,

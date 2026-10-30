@@ -208,7 +208,7 @@ fig = figure('Color', 'white', 'Name', fname, 'NumberTitle', 'off');
 for pi = 1:4
     ax = subplot(2, 2, pi);
     hold(ax, 'on');
-
+    set(ax, 'YScale', 'log');
     semilogy(ax, steps, data_all(:, pi), ...
              'Color', colors(pi,:), 'LineWidth', 1.5, 'Marker', 'o', ...
              'MarkerSize', 4, 'MarkerFaceColor', colors(pi,:));

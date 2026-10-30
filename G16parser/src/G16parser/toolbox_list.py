@@ -13,6 +13,8 @@ from .energy import g16_energy
 from .fchk_read import g16_fchk_read
 from .gaussian_version import g16_gaussian_version
 from .get_bond_length import g16_get_bond_length
+from .get_angle import g16_get_angle
+from .get_dihedral import g16_get_dihedral
 from .hyperpolar import g16_hyperpolar
 from .mode_viewer import g16_mode_viewer
 from .nbo_bonds import g16_nbo_bonds
@@ -31,7 +33,7 @@ from .write_report import g16_write_report
 _FUNCTIONS = [
     g16_gaussian_version, g16_charge_mult, g16_route, g16_available_data, g16_structure, g16_read_input, g16_energy,
     g16_convergence, g16_dipole_polar, g16_charges, g16_nmodes, g16_spectra, g16_spectra_nm,
-    g16_orbital_energies, g16_get_bond_length, g16_nbo_bonds, g16_fchk_read, g16_charges_fchk,
+    g16_orbital_energies, g16_get_bond_length, g16_get_angle, g16_get_dihedral, g16_nbo_bonds, g16_fchk_read, g16_charges_fchk,
     g16_hyperpolar, g16_tddft,
     g16_read_all, g16_restart, g16_batch_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
     g16_animate_mode, g16_mode_viewer, g16_write_report,
