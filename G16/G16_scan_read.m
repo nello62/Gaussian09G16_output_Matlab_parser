@@ -102,16 +102,27 @@ for k = a:b
     if isempty(strfind(lines{k}, 'ModRedundant input section has been read')), continue; end
     for j = k+1:b
         tok = regexp(lines{j}, ...
-            '^\s*([BADLbadl])\s+((?:\d+\s+){2,4})([SFsf])(?=\s|$)(?:\s+(\d+)\s+([-\d.]+))?', ...
+            '^\s*([BADLbadl])\s+((?:\d+\s+){2,4})([SFsf])(?=\s|$)(\s+\d+\s+[-\d.]+)?', ...
             'tokens', 'once');
         if isempty(tok), break; end
+        % The trailing "nsteps stepsize" span is captured as a single group
+        % (parsed below with sscanf): a capturing group nested inside an
+        % optional non-capturing group, e.g. (?:\s+(\d+)\s+([-\d.]+))?, is
+        % silently dropped from MATLAB's 'tokens' output even when it does
+        % participate (unlike Octave, where this toolbox was first tried).
+        tok(end+1:4) = {''};
         ctype = upper(tok{1});
         atoms = sscanf(tok{2}, '%d')';
         label = sprintf('%s(%s)', ctype, strjoin(arrayfun(@num2str, atoms, ...
                         'UniformOutput', false), ','));
         if upper(tok{3}) == 'S'
             c.type = ctype; c.atoms = atoms; c.label = label;
-            c.nsteps = str2double(tok{4}); c.stepsize = str2double(tok{5});
+            sv = sscanf(tok{4}, '%d %f')';
+            if numel(sv) == 2
+                c.nsteps = sv(1); c.stepsize = sv(2);
+            else
+                c.nsteps = NaN; c.stepsize = NaN;
+            end
             if ctype == 'B', c.units = 'Angstrom'; else, c.units = 'deg'; end
             coords(end+1) = c; %#ok<AGROW>
         else
