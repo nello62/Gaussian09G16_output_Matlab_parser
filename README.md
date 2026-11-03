@@ -80,7 +80,7 @@ installed on your machine (returns a `table`, filterable by description).
 | `get_bond_length` | Bond-length table from covalent radii |
 | `nbo_bonds` | Bond order (single/double/triple) from an actual Gaussian NBO analysis (`pop=nbo`), by counting bonding (BD) natural bond orbitals per atom pair |
 | `gaussian_version` | Detects the Gaussian version/revision that produced the file (works on `.fchk` via a sibling `.log`/`.out`) |
-| `read_all` | Runs the full extraction set in one call, reading the file only once |
+| `read_all` | Runs the full extraction set in one call, reading the file only once (single-structure jobs; warns on relaxed scans, IRCs and `--Link1--` chains) |
 | `batch_read_all` | Runs `read_all` (+ `orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary table; per-file failures are recorded, not fatal |
 | `fchk_read` | Reads a Gaussian formatted checkpoint (`.fchk`) file — works on both G09 and G16 `.fchk` files regardless of which toolbox folder is used, since the format does not depend on the Gaussian version |
 | `charges_fchk` | Visualises charges from a `fchk_read` struct |
@@ -88,6 +88,8 @@ installed on your machine (returns a `table`, filterable by description).
 | `restart` | Generates a `.gjf` restart input file from an existing output file |
 | `hyperpolar` *(G16 only)* | Dipole hyperpolarisability (Beta) |
 | `tddft` *(G16 only)* | TD-DFT excited states |
+| `scan_read` *(G16 only)* | Relaxed PES scan (`Opt=ModRedundant`, `S` coordinate) point by point: converged geometries, energies, scanned coordinate(s) measured on each geometry, ΔE profile; finds the scan job inside a `--Link1--` chain |
+| `irc_read` *(G16 only)* | IRC point by point, ordered reverse → TS → forward, with signed reaction coordinate and ΔE relative to the TS; also reads IRCs inside a `--Link1--` chain and IRCs that stopped with an error |
 
 ### Visualisation
 

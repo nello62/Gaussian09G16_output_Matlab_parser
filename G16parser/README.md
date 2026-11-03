@@ -99,7 +99,9 @@ main [README](../README.md).
 | `g16_gaussian_version` | Detects the Gaussian version/revision (works on `.fchk` via a sibling `.log`/`.out`) |
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
-| `g16_read_all` | Runs the full extraction set in one call, reading the file only once |
+| `g16_read_all` | Runs the full extraction set in one call, reading the file only once (single-structure jobs; warns on scans, IRCs and `--Link1--` chains) |
+| `g16_scan_read` | Relaxed PES scan (`Opt=ModRedundant` with an `S` coordinate) point by point: converged geometries, energies, scanned coordinate(s) measured on each geometry, ΔE profile (`plot=True`); finds the scan job inside a `--Link1--` chain |
+| `g16_irc_read` | IRC point by point, ordered reverse → TS → forward: signed reaction coordinate, energies, ΔE relative to the TS, geometries (`plot=True`); also reads IRCs inside a `--Link1--` chain and IRCs that stopped with an error |
 | `g16_restart` | Generates a `.gjf` restart input file from an existing output file |
 | `g16_batch_read_all` | Runs `g16_read_all` (+ `g16_orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal |
 | `g16_write_report` | Writes a formatted text report (.txt) from a `g16_read_all` Struct |

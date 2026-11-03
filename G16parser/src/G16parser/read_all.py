@@ -9,6 +9,7 @@ from .nmodes import g16_nmodes
 from .spectra import g16_spectra
 from .route import g16_route
 from .charge_mult import g16_charge_mult
+from ._pathjobs import split_jobs
 
 
 def g16_read_all(filename):
@@ -35,8 +36,16 @@ def g16_read_all(filename):
             same condition as .nmodes above
         .route      — Gaussian route section (g16_route)
         .chargemol  — Struct(charge=, mol=) from g16_charge_mult
+
+    Notes
+    -----
+    Every field is taken from the LAST occurrence in the file. For files
+    holding several structures -- a relaxed scan, an IRC, or several jobs
+    chained with --Link1-- -- the fields may come from different jobs or
+    points; a warning is issued, pointing to g16_scan_read / g16_irc_read.
     """
     lines = read_lines(filename)
+    _warn_multistructure(filename, lines)
 
     charge = g16_charges(filename, plot=False, lines=lines)
     energy = g16_energy(filename, lines=lines)
@@ -68,3 +77,23 @@ def g16_read_all(filename):
         nmodes=nmodes, spectra=spectra, route=route,
         chargemol=Struct(charge=c, mol=m),
     )
+
+
+def _warn_multistructure(filename, lines):
+    """Warns when g16_read_all's 'last occurrence' logic would mix data
+    from several jobs or path points."""
+    n_jobs = len(split_jobs(lines))
+    has_scan = any("on scan point" in ln for ln in lines)
+    has_irc = any("IRC-IRC-IRC" in ln for ln in lines)
+    if has_scan:
+        warnings.warn(f"{filename} contains a relaxed PES scan: g16_read_all returns only the "
+                      "last scan point. Use g16_scan_read for the full scan.")
+    if has_irc:
+        warnings.warn(f"{filename} contains an IRC: g16_read_all fields may mix the TS "
+                      "(frequencies, thermochemistry) with the last IRC point (energy, "
+                      "structure). Use g16_irc_read for the reaction path.")
+    if n_jobs > 1:
+        warnings.warn(f"{filename} contains {n_jobs} jobs chained with --Link1--: g16_read_all "
+                      "takes each field from its last occurrence, which may belong to "
+                      "different jobs. Split the file (one job per file) or use "
+                      "g16_scan_read / g16_irc_read.")

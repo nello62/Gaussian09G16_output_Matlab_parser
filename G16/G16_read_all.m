@@ -37,6 +37,12 @@ function T = G16_read_all(filename)
 %       .chargemol.mol    - spin multiplicity
 %                           (see G16_charge_mult)
 %
+%   NOTE: every field is taken from the LAST occurrence in the file. For
+%   files holding several structures -- a relaxed scan, an IRC, or several
+%   jobs chained with --Link1-- -- the fields may come from different jobs
+%   or path points; a warning is issued, pointing to G16_scan_read /
+%   G16_irc_read.
+%
 %   EXAMPLE:
 %     T = G16_read_all('zeatin.out');
 %     disp(T.energy)
@@ -56,6 +62,7 @@ function T = G16_read_all(filename)
     fclose(fid);
     lines = strsplit(raw, newline);
     G16_check_gaussian_match(lines, filename);
+    warn_multistructure(lines, filename);
 
     % Mulliken and APT charge values
     T.charge = G16_charges(filename, 'plot', false, 'Lines', lines);
@@ -99,4 +106,29 @@ function T = G16_read_all(filename)
     T.chargemol.charge = c;
     T.chargemol.mol    = m;
 
+end
+
+
+% =========================================================================
+function warn_multistructure(lines, filename)
+% Warns when the 'last occurrence' logic would mix data from several jobs
+% or path points (relaxed scans, IRCs, --Link1-- chains).
+n_jobs   = max(1, sum(~cellfun(@isempty, strfind(lines, 'Entering Link 1'))));
+has_scan = any(~cellfun(@isempty, strfind(lines, 'on scan point')));
+has_irc  = any(~cellfun(@isempty, strfind(lines, 'IRC-IRC-IRC')));
+if has_scan
+    warning('G16_read_all:scan', ['%s contains a relaxed PES scan: G16_read_all ' ...
+        'returns only the last scan point. Use G16_scan_read for the full scan.'], filename);
+end
+if has_irc
+    warning('G16_read_all:irc', ['%s contains an IRC: fields may mix the TS ' ...
+        '(frequencies, thermochemistry) with the last IRC point (energy, structure). ' ...
+        'Use G16_irc_read for the reaction path.'], filename);
+end
+if n_jobs > 1
+    warning('G16_read_all:multiJob', ['%s contains %d jobs chained with --Link1--: ' ...
+        'each field is taken from its last occurrence, which may belong to different ' ...
+        'jobs. Split the file (one job per file) or use G16_scan_read / G16_irc_read.'], ...
+        filename, n_jobs);
+end
 end
