@@ -2551,6 +2551,114 @@ supported only for Gaussian~16 output files.
 \newpage
 
 % =============================================================================
+\section{Reaction paths: relaxed scans and IRC (G16 only)}
+% =============================================================================
+The single-structure parsers (and \code{G16\_read\_all}) take every quantity
+from its \emph{last} occurrence in the file. A relaxed scan or an IRC holds
+one structure per path point, often in a file that also contains other jobs
+chained with \code{--Link1--} (e.g.\ TS optimisation + Freq + IRC). The two
+functions below read such files point by point. Jobs are separated at the
+\code{Entering Link 1} lines; the Freq step that Gaussian appends internally
+to an \code{Opt Freq} route does not print one and stays with its Opt job.
+
+\subsection{G16\_scan\_read}
+
+\begin{lstlisting}
+S = G16_scan_read(filename)
+S = G16_scan_read(filename, 'plot', true)   % with dE plot
+S = G16_scan_read(filename, 'job', 2)       % 2nd job of a chain
+\end{lstlisting}
+
+Reads a relaxed potential-energy-surface scan (\code{Opt=ModRedundant} with an
+\code{S} coordinate). For every scan point it returns the converged
+constrained geometry (the last orientation block before
+\code{Stationary point found}), its SCF energy, and the scanned coordinate(s)
+\emph{measured on that geometry}; dihedrals are unwrapped along the scan.
+A point that did not converge (job stopped inside it) is returned with
+\code{.converged = false} and a warning.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'job'}   & \code{'auto'} & Job of a \code{--Link1--} chain to read (1-based); \code{'auto'} takes the first relaxed scan \\
+\code{'plot'}  & \code{false}  & Plot $\Delta E$ (kcal/mol) versus the scanned coordinate (1-D) or the point index \\
+\code{'Lines'} & \code{\{\}}   & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.coords} & Struct array of scanned coordinates: \code{.type} (\code{'B'}, \code{'A'}, \code{'D'}), \code{.atoms}, \code{.label} (e.g.\ \code{'D(4,1,3,9)'}), \code{.nsteps}, \code{.stepsize}, \code{.units} \\
+\code{.frozen} & Cell array of frozen (\code{F}) coordinates \\
+\code{.value} & $[N_\text{pts}\times N_\text{coord}]$ scanned coordinate(s) measured on each geometry \\
+\code{.E}, \code{.dE\_kcal}, \code{.dE\_kJ} & SCF energy (Hartree); energy relative to the lowest point \\
+\code{.i\_min}, \code{.point} & Index of the lowest point; scan-point number \\
+\code{.converged}, \code{.opt\_steps} & Logical per point; optimisation steps used per point \\
+\code{.n\_points\_expected} & Number of points announced by Gaussian \\
+\code{.mol} & Struct array, one per point, accepted by \code{G16\_get\_bond\_length}, \code{G16\_get\_angle}, \code{G16\_get\_dihedral}, \code{G16\_draw\_molecule} \\
+\code{.xyz} & $[N_\text{atoms}\times3\times N_\text{pts}]$ coordinates (\AA) \\
+\code{.completed}, \code{.status} & Normal termination flag; termination message \\
+\code{.symbols}, \code{.Z}, \code{.method}, \code{.job}, \code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+S = G16_scan_read('NMA_scanCN.log', 'plot', true);
+[S.value S.dE_kcal]                        % profile omega / dE
+[~, phi] = G16_get_dihedral(S.mol(13), [2 1 3 8]);   % any other dihedral
+\end{lstlisting}
+
+\begin{tbnote}
+Gaussian prints the dipole moment and the atomic charges of a relaxed scan
+only for the first and the last geometry, so they are not returned per
+point; run single-point jobs on \code{S.mol(k)} when they are needed. Rigid
+scans (\code{Scan} keyword, no optimisation) are not supported.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G16\_irc\_read}
+
+\begin{lstlisting}
+I = G16_irc_read(filename)
+I = G16_irc_read(filename, 'plot', true)    % with dE plot
+\end{lstlisting}
+
+Reads an IRC point by point and orders the points reverse $\rightarrow$ TS
+$\rightarrow$ forward, with a signed reaction coordinate (negative on the
+REVERSE branch, 0 at the TS) and energies relative to the TS. Path-point
+geometries are taken from the \code{CURRENT STRUCTURE} block printed after
+each \code{Point Number: k Path Number: p} line. The TS geometry is the last
+orientation block before point 0 or, for \code{Geom=Check} jobs, the
+\code{Structure from the checkpoint file} echo. Energies are the HPC
+corrector end-point energies when present (\code{'hpc\_corrected'}),
+otherwise the SCF energy of the point (\code{'scf'}); the TS energy is
+\code{Energy From Chk} when available (\code{'chk'}). An IRC that stopped
+with an error (e.g.\ \textit{Maximum number of corrector steps exceeded})
+is read up to its last completed point.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'job'}   & \code{'auto'} & Job of a \code{--Link1--} chain to read (1-based); \code{'auto'} takes the first IRC \\
+\code{'plot'}  & \code{false}  & Plot $\Delta E$ relative to the TS (kcal/mol) versus the reaction coordinate \\
+\code{'Lines'} & \code{\{\}}   & Pre-read file lines \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.rxcoord} & Reaction coordinate (amu$^{1/2}$\,bohr), negative on the reverse branch \\
+\code{.E}, \code{.dE\_kcal}, \code{.dE\_kJ} & Energy (Hartree); energy relative to the TS \\
+\code{.E\_source} & \code{'chk'} \textbar\ \code{'scf'} \textbar\ \code{'hpc\_corrected'} per point \\
+\code{.direction}, \code{.point} & \code{'REVERSE'}/\code{'TS'}/\code{'FORWARD'}; point number on its branch \\
+\code{.i\_ts}, \code{.n\_forward}, \code{.n\_reverse} & Index of the TS; points completed on each branch \\
+\code{.mol}, \code{.xyz} & Per-point structures (as in \code{G16\_scan\_read}); $[N_\text{atoms}\times3\times N_\text{pts}]$ \\
+\code{.max\_points}, \code{.step\_size}, \code{.scheme} & IRC settings echoed by Gaussian (e.g.\ 40, \code{'0.100 bohr'}, \code{'HPC'}) \\
+\code{.completed}, \code{.status} & Normal termination flag; termination message \\
+\code{.symbols}, \code{.Z}, \code{.job}, \code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+I = G16_irc_read('NMA_TS_IRC_CN.log', 'plot', true);
+I.status                                   % why/whether the IRC stopped
+[~, w1] = G16_get_dihedral(I.mol(1),   [4 1 3 9]);   % reverse end
+[~, w2] = G16_get_dihedral(I.mol(end), [4 1 3 9]);   % forward end
+\end{lstlisting}
+
+\newpage
+
+% =============================================================================
 \section{Structural analysis utilities}
 % =============================================================================
 \subsection{G09\_get\_bond\_length / G16\_get\_bond\_length}
@@ -2928,6 +3036,16 @@ G16_draw_molecule(T.structure);
 \end{lstlisting}
 
 \begin{tbnote}
+\textbf{Multi-structure files:} every field is taken from its last
+occurrence in the file. When the file contains a relaxed scan, an IRC, or
+several jobs chained with \code{--Link1--}, \code{G16\_read\_all} (and the
+Python \code{g16\_read\_all}) issues a warning, since the fields may then
+come from different jobs or path points (e.g.\ thermochemistry of the TS
+but energy and structure of the last IRC point). Use \code{G16\_scan\_read}
+/ \code{G16\_irc\_read} for such files.
+\end{tbnote}
+
+\begin{tbnote}
 \textbf{Known discrepancy:} the current \code{G09\_read\_all} does
 \emph{not} populate \code{.route} or \code{.chargemol}, unlike
 \code{G16\_read\_all}, which retains both. If parity with \code{G16\_read\_all}
@@ -3132,6 +3250,8 @@ the file exactly once.
 \code{g16\_hyperpolar}        & Dipole hyperpolarisability ($\beta$) \\
 \code{g16\_tddft}             & TD-DFT excited states \\
 \code{g16\_read\_all}         & Runs the full extraction set in one call, reading the file only once \\
+\code{g16\_scan\_read}        & Relaxed PES scan point by point: geometries, energies, scanned coordinate(s), $\Delta E$ profile \\
+\code{g16\_irc\_read}         & IRC point by point, ordered reverse $\rightarrow$ TS $\rightarrow$ forward, energies relative to the TS \\
 \code{g16\_restart}           & Generates a \code{.gjf} restart input file from an existing output file \\
 \code{g16\_batch\_read\_all}  & Runs \code{g16\_read\_all} (+ \code{g16\_orbital\_energies}) over every \code{.log}/\code{.out} file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal \\
 \code{g16\_draw\_molecule}    & 3D CPK ball-and-stick render (matplotlib \code{mplot3d}) \\
@@ -3190,6 +3310,8 @@ g16_charges_fchk(mol, ch, mode="atom", plot=True, atom_scale=0.35,
                  bond_tol=1.30, font_size=8, color_scale="RdBu", threshold=0.0)
 g16_hyperpolar(filename, units="au", lines=None)
 g16_tddft(filename, nstates=math.inf, plot=False, fwhm_ev=0.30, lines=None)
+g16_scan_read(filename, job="auto", plot=False, ax=None, lines=None)
+g16_irc_read(filename, job="auto", plot=False, ax=None, lines=None)
 g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem="")
 g16_batch_read_all(folder, recursive=False, write_reports=False, save_as="")
 g16_write_report(T, outfile=None)

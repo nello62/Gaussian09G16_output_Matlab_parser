@@ -21,6 +21,8 @@ from .nbo_bonds import g16_nbo_bonds
 from .nmodes import g16_nmodes
 from .orbital_energies import g16_orbital_energies
 from .read_all import g16_read_all
+from .scan_read import g16_scan_read
+from .irc_read import g16_irc_read
 from .read_input import g16_read_input
 from .restart import g16_restart
 from .route import g16_route
@@ -35,7 +37,7 @@ _FUNCTIONS = [
     g16_convergence, g16_dipole_polar, g16_charges, g16_nmodes, g16_spectra, g16_spectra_nm,
     g16_orbital_energies, g16_get_bond_length, g16_get_angle, g16_get_dihedral, g16_nbo_bonds, g16_fchk_read, g16_charges_fchk,
     g16_hyperpolar, g16_tddft,
-    g16_read_all, g16_restart, g16_batch_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
+    g16_read_all, g16_scan_read, g16_irc_read, g16_restart, g16_batch_read_all, g16_draw_molecule, g16_draw_mode, g16_draw_orbital,
     g16_animate_mode, g16_mode_viewer, g16_write_report,
 ]
 

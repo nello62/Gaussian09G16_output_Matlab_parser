@@ -33,6 +33,8 @@ from .charges_fchk import g16_charges_fchk
 from .hyperpolar import g16_hyperpolar
 from .tddft import g16_tddft
 from .read_all import g16_read_all
+from .scan_read import g16_scan_read
+from .irc_read import g16_irc_read
 from .restart import g16_restart
 from .batch_read_all import g16_batch_read_all
 from .draw_molecule import g16_draw_molecule
@@ -51,7 +53,7 @@ __all__ = [
     "g16_structure", "g16_read_input", "g16_energy", "g16_convergence", "g16_dipole_polar",
     "g16_charges", "g16_nmodes", "g16_spectra", "g16_spectra_nm", "g16_orbital_energies",
     "g16_get_bond_length", "g16_get_angle", "g16_get_dihedral", "g16_nbo_bonds", "g16_fchk_read", "g16_charges_fchk",
-    "g16_hyperpolar", "g16_tddft", "g16_read_all",
+    "g16_hyperpolar", "g16_tddft", "g16_read_all", "g16_scan_read", "g16_irc_read",
     "g16_restart", "g16_batch_read_all",
     "g16_draw_molecule", "g16_draw_mode", "g16_draw_deformation", "g16_draw_orbital",
     "g16_animate_mode", "g16_mode_viewer", "g16_list", "g16_write_report",
