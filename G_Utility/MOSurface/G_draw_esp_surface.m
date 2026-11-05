@@ -603,10 +603,29 @@ else
     view(ax, 3);
     lighting(ax, 'gouraud');
     material(ax, 'dull');
-    camlight(ax, 'headlight');
-    camlight(ax, 45, 30);
+    light1 = camlight(ax, 'headlight');
+    light2 = camlight(ax, 45, 30);
     axis(ax, 'tight');
     camproj(ax, 'perspective');
+
+    % Keep both lights tracking the camera after every view change, the
+    % same mechanism G16_draw_molecule/G09_draw_molecule use (see their
+    % own comments): ROTATE3D's ActionPostCallback covers interactive
+    % rotation, and a 'View' PostSet listener additionally covers a
+    % programmatic SET(ax,'View',[az el]) call, which does not fire
+    % ActionPostCallback on its own. Without either, the surface ends up
+    % lit from behind after a large enough view change, losing its
+    % shading gradient. Any listener left by a previous call into this
+    % same axes is deleted first so listeners do not accumulate.
+    h_rot = rotate3d(ax);
+    h_rot.Enable = 'on';
+    h_rot.ActionPostCallback = @(~, ~) local_relight(light1, light2);
+    old_lh = getappdata(ax, 'G_draw_esp_surface_ViewListener');
+    if ~isempty(old_lh) && isvalid(old_lh)
+        delete(old_lh);
+    end
+    view_lh = addlistener(ax, 'View', 'PostSet', @(~, ~) local_relight(light1, light2));
+    setappdata(ax, 'G_draw_esp_surface_ViewListener', view_lh);
 end
 
 if isempty(fig_title)
@@ -626,6 +645,14 @@ end % G_draw_esp_surface
 % =========================================================================
 %  Local functions
 % =========================================================================
+
+function local_relight(light1, light2)
+% Reposition both lights to match the camera's current position after a
+% view change (see the comment above where this is wired up as a
+% ROTATE3D ActionPostCallback and a 'View' PostSet listener).
+camlight(light1, 'headlight');
+camlight(light2, 45, 30);
+end
 
 function Z = read_nuclear_charges(filename, Natoms)
 %READ_NUCLEAR_CHARGES  Reads the .fchk "Nuclear charges" section directly
