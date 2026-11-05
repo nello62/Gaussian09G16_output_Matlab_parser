@@ -307,16 +307,18 @@ if show_axes
 end
 
 % Enable interactive rotation, and keep both lights tracking the camera
-% after every interactive rotation. CAMLIGHT only positions a light
-% relative to the camera at the moment it is called ("In order for a
-% light created with CAMLIGHT to stay in a constant position relative
-% to the camera, CAMLIGHT must be called whenever the camera is moved"
-% -- MATLAB doc); ROTATE3D does not do this on its own, so without this
-% callback the lights stay fixed in the axes' 3-D world frame while the
-% molecule rotates underneath them. After a large enough rotation (e.g.
-% 180 degrees) the CPK spheres end up lit from behind instead of from
-% the viewer's side, losing the shading gradient that gives them their
-% 3-D appearance and making them look flat/uniformly lit.
+% after every view change -- whether from interactive rotation (ROTATE3D)
+% or a direct SET(ax,'View',[az el]) call made by calling code. CAMLIGHT
+% only positions a light relative to the camera at the moment it is
+% called ("In order for a light created with CAMLIGHT to stay in a
+% constant position relative to the camera, CAMLIGHT must be called
+% whenever the camera is moved" -- MATLAB doc); neither ROTATE3D nor a
+% plain SET('View',...) does this on their own, so without a relight the
+% lights stay fixed in the axes' 3-D world frame while the molecule
+% rotates underneath them. After a large enough rotation (e.g. 180
+% degrees) the CPK spheres end up lit from behind instead of from the
+% viewer's side, losing the shading gradient that gives them their 3-D
+% appearance and making them look flat/uniformly lit.
 % ActionPostCallback is a property (assigning it again simply replaces
 % the previous callback), not an event -- rotate3d's mode-manager object
 % is shared per figure, so repeated calls into the same figure (e.g. one
@@ -324,6 +326,19 @@ end
 h_rot = rotate3d(ax);
 h_rot.Enable = 'on';
 h_rot.ActionPostCallback = @(~, ~) local_relight(light1, light2);
+
+% A 'View' PostSet listener additionally catches a programmatic view
+% change made without ROTATE3D (confirmed: SET(ax,'View',...) alone does
+% NOT fire ActionPostCallback, only an interactive drag does). Unlike
+% ActionPostCallback, addlistener creates a new listener object on every
+% call, so any listener left by a previous G16_draw_molecule call into
+% this same axes is deleted first to avoid accumulating duplicates.
+old_lh = getappdata(ax, 'G16_draw_molecule_ViewListener');
+if ~isempty(old_lh) && isvalid(old_lh)
+    delete(old_lh);
+end
+view_lh = addlistener(ax, 'View', 'PostSet', @(~, ~) local_relight(light1, light2));
+setappdata(ax, 'G16_draw_molecule_ViewListener', view_lh);
 
 % Adjust perspective
 camproj(ax, 'perspective');
