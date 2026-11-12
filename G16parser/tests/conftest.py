@@ -96,3 +96,20 @@ def sample_gjf():
     not from a real calculation), so safe to keep committed.
     """
     return str(FIXTURES_DIR / "water.gjf")
+
+
+@pytest.fixture(scope="session")
+def sample_link1_log():
+    """Path to a real Gaussian 16 log with two jobs chained by --Link1--,
+    used by g16_split_link1_log tests. Distinct from sample_out, which
+    resolves to a single-job file.
+
+    Skips (rather than fails) any test that depends on it if no such
+    file is present yet.
+    """
+    candidates = [p for p in sorted(FIXTURES_DIR.glob("*.LOG")) + sorted(FIXTURES_DIR.glob("*.log"))
+                  if "nbo" not in p.name.lower()]
+    for p in candidates:
+        if "Entering Link 1" in p.read_text(encoding="utf-8", errors="replace"):
+            return str(p)
+    pytest.skip("No --Link1---chained sample log in tests/fixtures/ yet")

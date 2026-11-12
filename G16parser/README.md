@@ -99,6 +99,7 @@ main [README](../README.md).
 | `g16_gaussian_version` | Detects the Gaussian version/revision (works on `.fchk` via a sibling `.log`/`.out`) |
 | `g16_hyperpolar` | Dipole hyperpolarisability (Beta) |
 | `g16_tddft` | TD-DFT excited states |
+| `g16_split_link1_log` | Splits a `--Link1--` chained log into one log per job; names from `%chk` or from a field value in the title — no G09/G16 distinction, since `--Link1--` chaining is version-independent |
 | `g16_read_all` | Runs the full extraction set in one call, reading the file only once |
 | `g16_restart` | Generates a `.gjf` restart input file from an existing output file |
 | `g16_batch_read_all` | Runs `g16_read_all` (+ `g16_orbital_energies`) over every `.log`/`.out` file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal |

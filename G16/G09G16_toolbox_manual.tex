@@ -3341,6 +3341,7 @@ the file exactly once.
 \code{g16\_gaussian\_\discretionary{}{}{}version} & Detects the Gaussian version/revision (works on \code{.fchk} via a sibling \code{.log}/\code{.out}) \\
 \code{g16\_hyperpolar}        & Dipole hyperpolarisability ($\beta$) \\
 \code{g16\_tddft}             & TD-DFT excited states \\
+\code{g16\_split\_link1\_log} & Splits a \code{--Link1--} chained log into one log per job; names from \code{\%chk} or from a field value in the title (no G09/G16 distinction: the \code{--Link1--} chaining format is version-independent) \\
 \code{g16\_read\_all}         & Runs the full extraction set in one call, reading the file only once \\
 \code{g16\_restart}           & Generates a \code{.gjf} restart input file from an existing output file \\
 \code{g16\_batch\_read\_all}  & Runs \code{g16\_read\_all} (+ \code{g16\_orbital\_energies}) over every \code{.log}/\code{.out} file in a folder and aggregates the key results into one summary DataFrame; per-file failures are recorded, not fatal \\
@@ -3400,6 +3401,8 @@ g16_charges_fchk(mol, ch, mode="atom", plot=True, atom_scale=0.35,
                  bond_tol=1.30, font_size=8, color_scale="RdBu", threshold=0.0)
 g16_hyperpolar(filename, units="au", lines=None)
 g16_tddft(filename, nstates=math.inf, plot=False, fwhm_ev=0.30, lines=None)
+g16_split_link1_log(logfile, naming="auto", pattern=r"scan along X: N = (-?\d+)",
+                     prefix="", outdir="")
 g16_restart(filename, step="last", output="", extra_route="", nproc=0, mem="")
 g16_batch_read_all(folder, recursive=False, write_reports=False, save_as="")
 g16_write_report(T, outfile=None)
