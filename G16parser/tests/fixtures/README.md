@@ -39,3 +39,13 @@ the port" for details) that produced plausible-looking but wrong
 IR/Raman values. `sample_out` (used by tests that assume a "plain" file)
 explicitly excludes any `.out` with a same-stem `.fchk` sibling, so it
 never resolves to `4-NTP.out`.
+
+`NMA_WB97XD_DEF2TZVP_TD_ALL.LOG` is a real Gaussian 16 output file: two
+TD-DFT jobs (wB97X-D/def2-TZVP on N-methylacetamide, 20 singlets + 20
+triplets each) chained with `--Link1--`, used by
+`test_split_link1_log.py` via the `sample_link1_log` fixture in
+`conftest.py`. Its `%chk` Link0 line is wrapped across two lines (Gaussian
+wraps at 80 columns), which is exactly the case `g16_split_link1_log`'s
+`%chk`-continuation handling exists for. Shared with the MATLAB toolbox's
+own `G16/tests/data/` (same file, same provenance: developed on a separate
+Windows PC for the November 2026 toolbox update).
