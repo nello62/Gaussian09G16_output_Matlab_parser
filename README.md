@@ -88,6 +88,9 @@ installed on your machine (returns a `table`, filterable by description).
 | `restart` | Generates a `.gjf` restart input file from an existing output file |
 | `hyperpolar` *(G16 only)* | Dipole hyperpolarisability (Beta) |
 | `tddft` *(G16 only)* | TD-DFT excited states |
+| `td_plot` *(G16 only)* | TD-DFT/CIS excited states with dominant orbital excitations (H/L labels), job selection in `--Link1--` chains, singlet/triplet separation, stick + Gaussian-broadened spectrum |
+| `td_levels` *(G16 only)* | Kohn–Sham orbital-level diagram with arrows for the dominant excitations of selected states (companion to `td_plot`) |
+| `split_link1_log` *(shared, no G09_/G16_ prefix; G16 only in practice — MATLAB R2019b+ required)* | Splits a `--Link1--` chained log into one log per job, named from `%chk` or from a field value in the title |
 
 ### Visualisation
 

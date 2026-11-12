@@ -99,7 +99,7 @@
 \title{\textbf{G09/G16 MATLAB Toolbox}\\[4pt]
        \large A parsing and visualisation toolbox for Gaussian~09/16 output files}
 \author{Sebastiano Trusso \\ CNR -- Istituto per i Processi Chimico-Fisici (IPCF), Messina, Italy}
-\date{Version 1.0 --- 2026}
+\date{Version 1.1 --- 2026}
 
 % =============================================================================
 \begin{document}
@@ -286,6 +286,58 @@ function receives pre-read \code{lines} via the \code{'Lines'} parameter
 (e.g.\ every sub-parser called by \code{G09\_read\_all}/\code{G16\_read\_all}),
 it skips both the disk read and the check, so a single call to
 \code{read\_all} produces exactly one warning, not one per sub-parser.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{split\_link1\_log \normalfont{(shared, no G09\_/G16\_ prefix)}}
+\label{ssub:splitlink1}
+
+\begin{lstlisting}
+files = split_link1_log(logfile)                  % automatic naming
+files = split_link1_log(logfile, 'naming', 'chk') % names from %chk
+files = split_link1_log(logfile, 'naming', 'field', ...
+                        'prefix', 'NMA_dip')      % names from field
+\end{lstlisting}
+
+Splits a Gaussian output that contains several jobs chained with
+\code{--Link1--} into one log file per job, so that every job can be read by
+the single-file parsers of the toolbox. Jobs are separated at the
+\code{Entering Link 1} lines; the file header is kept with the first job. The
+internal Link1 step that Gaussian creates for the Freq part of an
+\code{Opt Freq} route carries the same title and \code{\%chk} (or none) and is
+kept together with its optimisation. Each output file is named after a key
+read from its job:
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'naming'}  & \code{'auto'} & \code{'chk'}: name of the job's \code{.chk} file (e.g.\ \code{NMA\_TD\_trans.log}); \code{'field'}: \code{<prefix>\_Fp020.log}, \code{<prefix>\_Fm040.log}, \dots\ from the field value in the job title; \code{'auto'}: \code{'field'} if the title pattern is found in the first job, otherwise \code{'chk'} \\
+\code{'pattern'} & \code{'scan along X: N = (-?\textbackslash d+)'} & Regular expression with one token that captures the field value $N$ in the title (\code{'field'} naming) \\
+\code{'prefix'}  & log name without \code{\_scan\_all} & Prefix of the output names (\code{'field'} naming) \\
+\code{'outdir'}  & folder of the input & Output folder (created if missing) \\
+\end{argtable}
+
+Returns a cell array with the full names of the logs written and prints one
+line per job with the number of \code{Normal termination} lines and a status
+(\code{OK}, \code{ERROR termination}, \code{n of m steps terminated},
+\code{incomplete / still running}, plus \code{stationary point} for converged
+optimisations).
+
+\begin{lstlisting}
+files = split_link1_log('NMA_WB97XD_DEF2TZVP_TD_ALL.LOG', 'naming', 'chk');
+T = G16_td_plot(files{2});          % read the second job on its own
+\end{lstlisting}
+
+\begin{tbnote}
+Gaussian wraps Link0 lines at 80 columns, so a long \code{\%chk} path is
+printed on two or more lines; the function joins the continuation lines until
+the name ends in \code{.chk}. Paths in the \code{\%chk} line may use either
+\code{\textbackslash} or \code{/}. A job without a \code{\%chk} line inherits
+the key of the previous one; if two jobs share a key, \code{\_2}, \code{\_3},
+\dots\ are appended, and the input log is never overwritten. The function uses
+an \code{arguments} block and needs MATLAB R2019b or later. Most parsers of
+the toolbox can also read a single job of a chain directly through their
+\code{'job'} option (\code{G16\_scan\_read}, \code{G16\_irc\_read},
+\code{G16\_td\_plot}, \code{G16\_td\_levels}); splitting is convenient when
+the same job is read many times or by other programs.
 \end{tbnote}
 
 \newpage
@@ -2093,6 +2145,35 @@ See also \code{G\_draw\_density\_surface} (\S\ref{sec:gutil-density-surface}),
 \code{G\_draw\_esp\_surface} (\S\ref{sec:gutil-esp-surface}).
 
 % -----------------------------------------------------------------------------
+\subsection{G\_relight}
+\label{sec:gutil-relight}
+
+\begin{lstlisting}
+G_relight                 % current axes, current view
+G_relight(ax)             % given axes (or an array of axes)
+G_relight(ax, [az el])    % set the view first, then relight
+G_relight([], [0 90])     % current axes, view from the top
+\end{lstlisting}
+
+Re-positions the lights of a 3-D axes so that they follow the current (or a
+new) viewing direction, for figures made by \code{G\_draw\_mo\_surface},
+\code{G\_draw\_density\_surface}, \code{G\_draw\_esp\_surface} or
+\code{G\_draw\_cube\_surface}. Changing \code{view} after drawing leaves the
+lights where they were, and the surfaces turn dark or flat; \code{G\_relight}
+restores the lighting scheme of the drawing functions: a headlight (light at
+the camera) plus a second light at azimuth 45\textdegree\ and elevation
+30\textdegree\ relative to the camera. Existing lights (the first two created
+in the axes) are re-used, so repeated calls do not accumulate lights; if the
+axes has none, they are created with Gouraud lighting.
+
+\begin{lstlisting}
+mo = G16_fchk_read('NMA_wB97XD_augTZ_TD_trans.fchk');
+G_draw_mo_surface(mo, 'HOMO');
+G_relight(gca, [-60 40]);
+exportgraphics(gca, 'HOMO.pdf', 'ContentType', 'vector');
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
 \subsection{Python port (\code{MOSurface/python/})}
 \label{sec:gutil-mo-surface-python}
 
@@ -2517,7 +2598,9 @@ td = G16_tddft(filename, 'FWHM_eV', 0.3)   % broadening FWHM (eV)
 \end{lstlisting}
 
 Extracts TD-DFT excited states and generates a Gaussian-broadened UV-Vis
-spectrum.
+spectrum. For job selection in \code{--Link1--} chains, dominant-excitation
+labels and orbital-level diagrams see \code{G16\_td\_plot}
+(\S\ref{ssub:tdplot}) and \code{G16\_td\_levels} (\S\ref{ssub:tdlevels}).
 
 \begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
 \code{'nstates'} & \code{Inf}  & Load only the first $N$ excited states \\
@@ -2546,6 +2629,133 @@ td.trans{2}                    % transitions contributing to the 2nd state
 No G09 equivalent is provided: TD-DFT excited-state analysis and
 hyperpolarisability response properties in this toolbox are currently
 supported only for Gaussian~16 output files.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G16\_td\_plot}
+\label{ssub:tdplot}
+
+\begin{lstlisting}
+T = G16_td_plot(filename)
+T = G16_td_plot(filename, 'Job', 2)                       % job of a --Link1-- chain
+T = G16_td_plot(filename, 'XUnit', 'nm', 'FWHM', 0.4)
+T = G16_td_plot(filename, 'States', [1 4 7], 'Overlay', true)
+\end{lstlisting}
+
+Reads the TD-DFT (or CIS) excited states of a Gaussian~16 log together with
+their orbital excitations, assigns a dominant excitation to every state and
+plots the spectrum. Compared with \code{G16\_tddft}, it reads a chosen job of
+a \code{--Link1--} chain, keeps singlets and triplets apart, returns the weight
+$2c^2$ of every orbital excitation, labels orbitals relative to the frontier
+(\code{H-1->L+8}) and highlights a set of states with the same rule and colours
+used by \code{G16\_td\_levels}, so that the two figures of a calculation match.
+
+The figure has two panels: the stick spectrum ($f$ versus excitation energy;
+singlets, or all states of an unrestricted run, as stems; triplets, $f = 0$,
+as triangles on the axis), with the selected states in colour and labelled
+with state number, energy and dominant excitation; and, when
+\code{'FWHM'}~$>0$, the Gaussian-broadened absorption spectrum $\varepsilon$
+(L\,mol$^{-1}$\,cm$^{-1}$) on the same axis. With \code{'Overlay', true} a
+single panel is drawn, with the broadened spectrum as a shaded envelope behind
+the sticks, scaled so that its maximum equals the largest $f$ (shape only).
+A table of all states (number, multiplicity, eV, nm, $f$, main excitation) is
+printed in the Command Window.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Job'}       & last job with TD & Job of a \code{--Link1--} chain to read (1-based) \\
+\code{'XUnit'}     & \code{'eV'}   & \code{'eV'} \textbar\ \code{'nm'} \textbar\ \code{'cm-1'} \\
+\code{'FWHM'}      & \code{0.3}    & Gaussian broadening FWHM in eV; \code{0} = sticks only \\
+\code{'States'}    & \code{'auto'} & States highlighted and labelled: \code{'auto'} = first singlet + the \code{'NBright'} most intense singlets up to \code{'EMax'}; or a vector of state numbers \\
+\code{'NBright'}   & \code{2}      & Number of intense states chosen by \code{'auto'} \\
+\code{'EMax'}      & S$_1$ + 2.5 eV & Upper energy (eV) for \code{'auto'} \\
+\code{'NLabel'}    & \code{[]}     & Legacy option: label the \code{NLabel} most intense states instead \\
+\code{'Triplets'}  & \code{true}   & Show the triplet states \\
+\code{'MinWeight'} & \code{0.05}   & Smallest weight $2c^2$ kept in \code{.transitions} \\
+\code{'Overlay'}   & \code{false}  & Single panel with the scaled envelope behind the sticks \\
+\code{'Plot'}      & \code{true}   & \code{false} = data only \\
+\code{'Title'}     & file, job     & Figure title \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.state}, \code{.mult}, \code{.sym} & State number; multiplicity (\code{'Singlet'}, \code{'Triplet'}, \code{'Doublet'}, \dots); symmetry label \\
+\code{.E\_eV}, \code{.nm}, \code{.cm1}, \code{.f}, \code{.S2} & Excitation energy, wavelength, wavenumber, oscillator strength, $\langle S^2\rangle$ (per state, in energy order) \\
+\code{.transitions} & Cell array, one struct array per state: \code{.from}, \code{.to}, \code{.coef}, \code{.weight} ($=2c^2$ for closed shell), \code{.deexc} (true for \code{<-} lines), \code{.label} \\
+\code{.main} & Per-state string with the dominant excitation, e.g.\ \code{'H->L+8 89\%'} \\
+\code{.HOMO} & Index of the HOMO (number of $\alpha$ electrons) \\
+\code{.selected} & State numbers highlighted (energy order) \\
+\code{.job}, \code{.filename} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+T = G16_td_plot('NMA_wB97XD_augTZ_TD_trans.log', 'FWHM', 0.3);
+tab = table(T.state', T.mult', T.E_eV', T.nm', T.f', T.main', ...
+            'VariableNames', {'State','Mult','E_eV','nm','f','Main'})
+T.transitions{5}                       % all excitations of S5 with weights
+\end{lstlisting}
+
+\begin{tbnote}
+The excited-state block read is the \emph{last} one of the selected job: for
+TD optimisations or state-specific solvation (\code{ExternalIteration}) this is
+the final iteration. Orbital labels H/L refer to the $\alpha$ HOMO; in
+unrestricted runs the spin is appended. With diffuse basis sets the valence
+$\pi^*$ orbital can lie well above the LUMO (e.g.\ LUMO+8 for
+N-methylacetamide in aug-cc-pVTZ), which the H/L labels make visible at once.
+\end{tbnote}
+
+% -----------------------------------------------------------------------------
+\subsection{G16\_td\_levels}
+\label{ssub:tdlevels}
+
+\begin{lstlisting}
+L = G16_td_levels(filename)
+L = G16_td_levels(filename, 'Job', 1, 'States', [3 6 8], ...
+                  'Labels', {19, '\pi_{nb}'; 20, 'n_O'; 29, '\pi^*'})
+\end{lstlisting}
+
+Draws the Kohn--Sham orbital-level diagram of one TD-DFT calculation around
+the frontier, with arrows for the dominant excitations of selected states.
+Occupied levels are dark grey and virtual levels light grey, thicker for HOMO,
+LUMO and the orbitals involved in the drawn excitations; energies are drawn at
+their true values and only the labels of near-degenerate levels are spread
+apart. For every selected state one arrow is drawn per excitation
+$i\rightarrow a$ with weight $2c^2 \ge$ \code{'MinWeight'}: one colour per
+state, line width growing with the weight, weight in \% along the arrow and
+the state name (S1, S6, \dots) at the tip. The legend gives energy,
+wavelength and oscillator strength of each state. The excited states are read
+with \code{G16\_td\_plot}, so the default selection and the colours are the
+same in the two figures.
+
+\begin{argtable}{Option}{Default}{Description}{2.6cm}{2.4cm}{X}
+\code{'Job'}       & last job with TD & Job of a \code{--Link1--} chain \\
+\code{'States'}    & \code{'auto'} & As in \code{G16\_td\_plot} \\
+\code{'NBright'}, \code{'EMax'} & \code{2}, S$_1$ + 2.5 eV & As in \code{G16\_td\_plot} \\
+\code{'MinWeight'} & \code{0.15}   & Smallest weight drawn as an arrow \\
+\code{'NOcc'}, \code{'NVirt'} & automatic & Occupied (HOMO included) and virtual (LUMO included) orbitals shown; default: enough for all drawn excitations, at least 3 \\
+\code{'Labels'}    & \code{\{\}}   & Chemical labels \code{\{MO, 'label'; ...\}}, TeX allowed \\
+\code{'YLim'}      & automatic     & Energy range \code{[Emin Emax]} in eV \\
+\code{'Title'}     & file, job     & Figure title \\
+\code{'Plot'}      & \code{true}   & \code{false} = data only \\
+\end{argtable}
+
+\begin{argtabletwo}{Field}{Description}{3.2cm}{X}
+\code{.HOMO}, \code{.occ\_eV}, \code{.virt\_eV} & HOMO index; all $\alpha$ occupied and virtual orbital energies (eV) \\
+\code{.states} & State numbers drawn \\
+\code{.arrows} & Struct array: \code{.state}, \code{.mult}, \code{.from}, \code{.to}, \code{.weight}, \code{.E\_eV}, \code{.nm}, \code{.f} \\
+\code{.file}, \code{.job} & \\
+\end{argtabletwo}
+
+\begin{lstlisting}
+f = 'NMA_wB97XD_augTZ_TD_trans.log';
+T = G16_td_plot(f);                    % spectrum: S1, S5, S10 highlighted
+L = G16_td_levels(f, 'Labels', {19,'\pi_{nb}'; 20,'n_O'; 29,'\pi^*'});
+exportgraphics(gcf, 'trans_levels.pdf', 'ContentType', 'vector')
+\end{lstlisting}
+
+\begin{tbnote}
+Requires \code{G16\_td\_plot.m} on the path. The orbital energies are the
+ground-state $\alpha$ eigenvalues printed after the last
+\code{Population analysis using the SCF density} of the selected job.
+Export the whole figure (\code{gcf}), not \code{gca}, to keep the legend.
 \end{tbnote}
 
 \newpage
